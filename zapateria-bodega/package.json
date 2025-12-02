@@ -9,12 +9,17 @@
     "build-win": "electron-builder --win --x64",
     "build-mac": "electron-builder --mac"
   },
-  "keywords": ["zapateria", "bodega", "inventario"],
+  "keywords": [
+    "zapateria",
+    "bodega",
+    "inventario"
+  ],
   "author": "Tu Nombre",
   "license": "MIT",
   "devDependencies": {
-    "electron": "^28.0.0",
-    "electron-builder": "^24.9.1"
+    "electron": "^39.2.4",
+    "electron-builder": "^24.9.1",
+    "electron-rebuild": "^3.2.9"
   },
   "build": {
     "appId": "com.zapateria.bodega",
@@ -30,7 +35,9 @@
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ]
     },
@@ -44,5 +51,11 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true
     }
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.5.0",
+    "dropbox": "^10.34.0",
+    "electron-store": "^11.0.2",
+    "isomorphic-fetch": "^3.0.0"
   }
 }
