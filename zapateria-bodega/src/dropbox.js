@@ -116,7 +116,17 @@ class DropboxManager {
         }
 
         try {
-            const response = await this.dbx.usersGetCurrentAccount();
+            console.log('🔍 Verificando conexión con Dropbox...');
+            
+            // Timeout de 5 segundos
+            const timeoutPromise = new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Timeout: La conexión tardó demasiado')), 5000)
+            );
+            
+            const verifyPromise = this.dbx.usersGetCurrentAccount();
+            
+            const response = await Promise.race([verifyPromise, timeoutPromise]);
+            
             console.log('✅ Conectado a Dropbox:', response.result.name.display_name);
             return { 
                 success: true, 
@@ -124,8 +134,17 @@ class DropboxManager {
                 email: response.result.email
             };
         } catch (error) {
-            console.error('Error al verificar conexión:', error);
-            return { success: false, error: error.message };
+            console.error('❌ Error al verificar conexión Dropbox:', error.message);
+            
+            if (error.message && error.message.includes('Timeout')) {
+                return { success: false, error: 'La conexión tardó demasiado. Verifica tu internet.' };
+            }
+            
+            if (error.status === 401) {
+                return { success: false, error: 'Token inválido o expirado' };
+            }
+            
+            return { success: false, error: error.message || 'Error desconocido' };
         }
     }
 }
