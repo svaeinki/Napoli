@@ -31,7 +31,9 @@
                     <div class="form-grid">
                         <div class="form-group">
                             <label>RUT Cliente *</label>
-                            <input type="text" id="rut" placeholder="Ej: 12345678-9" required>
+                            <input type="text" id="rut" placeholder="Ej: 12345678-9" required 
+                                   oninput="validarRUTEnTiempoReal(this)">
+                            <small id="rutError" style="color: #dc3545; display: none; margin-top: 5px;">RUT inválido</small>
                         </div>
 
                         <div class="form-group">
@@ -275,7 +277,14 @@
         </div>
     </div>
 
-    <!-- Cargar JavaScript -->
-    <script src="js/renderer.js"></script>
+    <!-- Cargar JavaScript modular -->
+    <script src="js/utils.js"></script>
+    <script src="js/validacion.js"></script>
+    <script src="js/articulos.js"></script>
+    <script src="js/inventario.js"></script>
+    <script src="js/pagos.js"></script>
+    <script src="js/busqueda.js"></script>
+    <script src="js/backups.js"></script>
+    <script src="js/main.js"></script>
 </body>
 </html>
