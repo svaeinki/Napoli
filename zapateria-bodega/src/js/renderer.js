@@ -40,11 +40,17 @@ function showTab(tabName) {
     }
 }
 
+function formatearMoneda(valor) {
+    return new Intl.NumberFormat('es-CL').format(valor || 0);
+}
+
 // ============================================
 // ARTÍCULOS - CRUD
 // ============================================
 async function ingresarArticulo(e) {
     e.preventDefault();
+
+    const valorTotal = parseFloat(document.getElementById('valorTotal').value) || 0;
 
     const nuevoArticulo = {
         rut: document.getElementById('rut').value.trim(),
@@ -54,7 +60,8 @@ async function ingresarArticulo(e) {
         descripcion: document.getElementById('descripcion').value.trim(),
         numeroBodega: document.getElementById('numeroBodega').value.trim().toUpperCase(),
         observaciones: document.getElementById('observaciones').value.trim(),
-        fechaIngreso: new Date().toLocaleString('es-CL')
+        fechaIngreso: new Date().toLocaleString('es-CL'),
+        valorTotal: valorTotal
     };
 
     const resultado = await window.electronAPI.insertarArticulo(nuevoArticulo);
@@ -69,6 +76,8 @@ async function ingresarArticulo(e) {
         setTimeout(() => {
             window.electronAPI.imprimir();
         }, 500);
+        
+        await actualizarInventario();
     } else {
         mostrarNotificacion('❌ ' + resultado.error, true);
     }
@@ -121,6 +130,13 @@ function generarTicket(articulo) {
         <p><strong>Descripción:</strong> ${articulo.descripcion}</p>
         <p style="margin-top: 10px; font-size: 18px;"><strong>Bodega:</strong> <span style="background: #ffc107; padding: 5px 10px; border-radius: 5px;">${articulo.numeroBodega}</span></p>
         ${articulo.observaciones ? `<p><strong>Obs:</strong> ${articulo.observaciones}</p>` : ''}
+        ${articulo.valorTotal > 0 ? `
+            <p style="margin-top: 15px; padding-top: 15px; border-top: 2px dashed #000;">
+                <strong>VALOR TOTAL:</strong> $${formatearMoneda(articulo.valorTotal)}<br>
+                <strong>ABONADO:</strong> $${formatearMoneda(articulo.totalAbonado)}<br>
+                <strong style="font-size: 16px;">SALDO:</strong> <strong style="font-size: 18px; color: #f44336;">$${formatearMoneda(articulo.saldoPendiente)}</strong>
+            </p>
+        ` : ''}
     `;
     
     document.getElementById('ticketContenido').innerHTML = contenido;
@@ -183,6 +199,8 @@ function mostrarTabla(datos, elementoId) {
                     <th>N° Bodega</th>
                     <th>Fecha Ingreso</th>
                     <th>Estado</th>
+                    <th>Estado Pago</th>
+                    <th>Saldo</th>
                     <th>Acciones</th>
                 </tr>
             </thead>
@@ -200,11 +218,14 @@ function mostrarTabla(datos, elementoId) {
                 <td><strong style="color: #667eea;">${art.numeroBodega}</strong></td>
                 <td><small>${art.fechaIngreso}</small></td>
                 <td><span class="status-badge ${art.estado === 'En Bodega' ? 'status-bodega' : 'status-entregado'}">${art.estado}</span></td>
+                <td><span class="estado-pago-badge estado-pago-${art.estadoPago.toLowerCase().replace(' ', '')}">${art.estadoPago}</span></td>
+                <td><strong style="color: ${art.saldoPendiente > 0 ? '#f44336' : '#4caf50'};">$${formatearMoneda(art.saldoPendiente)}</strong></td>
                 <td class="action-buttons">
                     ${art.estado === 'En Bodega' ? 
                         `<button class="btn btn-success btn-small" onclick="marcarEntregado(${art.id})">✓ Entregar</button>` : 
                         `<button class="btn btn-warning btn-small" onclick="marcarEnBodega(${art.id})">↩ Devolver</button>`
                     }
+                    <button class="btn btn-info btn-small" onclick="mostrarModalPago(${art.id})">💰 Pagos</button>
                     <button class="btn btn-primary btn-small" onclick="reimprimirTicket(${art.id})">🖨</button>
                     <button class="btn btn-danger btn-small" onclick="eliminarArticulo(${art.id})">🗑</button>
                 </td>
@@ -247,10 +268,10 @@ async function exportarDatos() {
         return;
     }
 
-    let csv = 'ID,RUT,Cliente,Teléfono,Tipo,Descripción,Bodega,Fecha Ingreso,Estado,Fecha Entrega,Observaciones\n';
+    let csv = 'ID,RUT,Cliente,Teléfono,Tipo,Descripción,Bodega,Fecha Ingreso,Estado,Fecha Entrega,Observaciones,Valor Total,Total Abonado,Saldo Pendiente,Estado Pago\n';
     
     articulos.forEach(art => {
-        csv += `${art.id},"${art.rut}","${art.nombreCliente}","${art.telefono || ''}","${art.tipoArticulo}","${art.descripcion}","${art.numeroBodega}","${art.fechaIngreso}","${art.estado}","${art.fechaEntrega || ''}","${art.observaciones || ''}"\n`;
+        csv += `${art.id},"${art.rut}","${art.nombreCliente}","${art.telefono || ''}","${art.tipoArticulo}","${art.descripcion}","${art.numeroBodega}","${art.fechaIngreso}","${art.estado}","${art.fechaEntrega || ''}","${art.observaciones || ''}",${art.valorTotal},${art.totalAbonado},${art.saldoPendiente},"${art.estadoPago}"\n`;
     });
 
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -384,5 +405,137 @@ async function listarBackupsDropbox() {
         }
     } else {
         mostrarNotificacion('❌ Error al listar backups: ' + resultado.error, true);
+    }
+}
+
+// ============================================
+// PAGOS Y ABONOS
+// ============================================
+async function mostrarModalPago(id) {
+    const articulo = await window.electronAPI.obtenerPorId(id);
+    if (!articulo) return;
+
+    const modal = document.getElementById('modalPago');
+    const modalTitle = document.getElementById('modalPagoTitle');
+    const pagoInfo = document.getElementById('pagoInfoModal');
+    
+    modalTitle.textContent = `Pagos - ${articulo.numeroBodega} - ${articulo.nombreCliente}`;
+    
+    // Mostrar información de pago
+    const claseEstado = articulo.saldoPendiente > 0 ? 'warning' : '';
+    pagoInfo.innerHTML = `
+        <div class="pago-info ${claseEstado}">
+            <div class="pago-grid">
+                <div class="pago-item">
+                    <label>Valor Total</label>
+                    <div class="valor">$${formatearMoneda(articulo.valorTotal)}</div>
+                </div>
+                <div class="pago-item">
+                    <label>Total Abonado</label>
+                    <div class="valor">${formatearMoneda(articulo.totalAbonado)}</div>
+                </div>
+                <div class="pago-item">
+                    <label>Saldo Pendiente</label>
+                    <div class="valor ${articulo.saldoPendiente > 0 ? 'pendiente' : 'pagado'}">$${formatearMoneda(articulo.saldoPendiente)}</div>
+                </div>
+            </div>
+            <div style="text-align: center; margin-top: 15px;">
+                <span class="estado-pago-badge estado-pago-${articulo.estadoPago.toLowerCase().replace(' ', '')}">${articulo.estadoPago}</span>
+            </div>
+        </div>
+    `;
+
+    // Cargar historial de abonos
+    const abonos = await window.electronAPI.pagoObtenerAbonos(id);
+    const abonosList = document.getElementById('abonosList');
+    
+    if (abonos.length === 0) {
+        abonosList.innerHTML = '<p style="text-align: center; color: #999; padding: 20px;">No hay abonos registrados</p>';
+    } else {
+        let html = '';
+        abonos.forEach(abono => {
+            html += `
+                <div class="abono-item">
+                    <div class="abono-header">
+                        <span class="abono-monto">$${formatearMoneda(abono.monto)}</span>
+                        <span class="abono-fecha">${new Date(abono.fecha).toLocaleString('es-CL')}</span>
+                    </div>
+                    <div class="abono-metodo">💳 ${abono.metodoPago}</div>
+                    ${abono.observaciones ? `<div style="font-size: 12px; color: #666; margin-top: 5px;">📝 ${abono.observaciones}</div>` : ''}
+                </div>
+            `;
+        });
+        abonosList.innerHTML = html;
+    }
+
+    // Guardar ID en el modal para usarlo después
+    modal.dataset.articuloId = id;
+    modal.style.display = 'block';
+}
+
+async function registrarNuevoAbono() {
+    const modal = document.getElementById('modalPago');
+    const articuloId = parseInt(modal.dataset.articuloId);
+    
+    const monto = parseFloat(document.getElementById('montoAbono').value);
+    const metodoPago = document.getElementById('metodoPago').value;
+    const observaciones = document.getElementById('observacionesAbono').value.trim();
+
+    if (!monto || monto <= 0) {
+        mostrarNotificacion('❌ Ingrese un monto válido', true);
+        return;
+    }
+
+    const resultado = await window.electronAPI.pagoRegistrarAbono(articuloId, monto, metodoPago, observaciones);
+
+    if (resultado.success) {
+        mostrarNotificacion('✅ Abono registrado correctamente');
+        document.getElementById('montoAbono').value = '';
+        document.getElementById('observacionesAbono').value = '';
+        
+        // Recargar modal
+        await mostrarModalPago(articuloId);
+        await actualizarInventario();
+    } else {
+        mostrarNotificacion('❌ Error al registrar abono: ' + resultado.error, true);
+    }
+}
+
+async function actualizarValorServicio() {
+    const modal = document.getElementById('modalPago');
+    const articuloId = parseInt(modal.dataset.articuloId);
+    
+    const nuevoValor = parseFloat(document.getElementById('nuevoValorTotal').value);
+
+    if (!nuevoValor || nuevoValor < 0) {
+        mostrarNotificacion('❌ Ingrese un valor válido', true);
+        return;
+    }
+
+    if (confirm(`¿Está seguro de actualizar el valor total a $${formatearMoneda(nuevoValor)}?`)) {
+        const resultado = await window.electronAPI.pagoActualizarValor(articuloId, nuevoValor);
+
+        if (resultado.success) {
+            mostrarNotificacion('✅ Valor actualizado correctamente');
+            document.getElementById('nuevoValorTotal').value = '';
+            
+            // Recargar modal
+            await mostrarModalPago(articuloId);
+            await actualizarInventario();
+        } else {
+            mostrarNotificacion('❌ Error al actualizar valor: ' + resultado.error, true);
+        }
+    }
+}
+
+function cerrarModalPago() {
+    document.getElementById('modalPago').style.display = 'none';
+}
+
+// Cerrar modal al hacer click fuera
+window.onclick = function(event) {
+    const modal = document.getElementById('modalPago');
+    if (event.target === modal) {
+        cerrarModalPago();
     }
 }

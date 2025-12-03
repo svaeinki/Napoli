@@ -22,6 +22,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
     // Imprimir
     imprimir: () => ipcRenderer.invoke('imprimir'),
     
+    // Pagos y Abonos
+    pagoRegistrarAbono: (articuloId, monto, metodoPago, observaciones) => 
+        ipcRenderer.invoke('pago:registrarAbono', articuloId, monto, metodoPago, observaciones),
+    pagoObtenerAbonos: (articuloId) => 
+        ipcRenderer.invoke('pago:obtenerAbonos', articuloId),
+    pagoActualizarValor: (articuloId, nuevoValor) => 
+        ipcRenderer.invoke('pago:actualizarValor', articuloId, nuevoValor),
+    
     // Dropbox
     dropboxConfigurar: (token) => ipcRenderer.invoke('dropbox:configurar', token),
     dropboxVerificar: () => ipcRenderer.invoke('dropbox:verificar'),

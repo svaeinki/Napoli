@@ -40,13 +40,31 @@ class DatabaseManager {
                 fechaIngreso TEXT NOT NULL,
                 fechaEntrega TEXT,
                 fechaCreacion DATETIME DEFAULT CURRENT_TIMESTAMP,
-                fechaModificacion DATETIME
+                fechaModificacion DATETIME,
+                
+                -- CAMPOS DE PAGO
+                valorTotal REAL DEFAULT 0,
+                totalAbonado REAL DEFAULT 0,
+                saldoPendiente REAL DEFAULT 0,
+                estadoPago TEXT DEFAULT 'Sin pago' CHECK(estadoPago IN ('Sin pago', 'Abonado', 'Pagado'))
             );
 
             CREATE INDEX IF NOT EXISTS idx_rut ON articulos(rut);
             CREATE INDEX IF NOT EXISTS idx_estado ON articulos(estado);
             CREATE INDEX IF NOT EXISTS idx_numeroBodega ON articulos(numeroBodega);
             CREATE INDEX IF NOT EXISTS idx_fechaIngreso ON articulos(fechaIngreso);
+
+            CREATE TABLE IF NOT EXISTS abonos (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                articuloId INTEGER NOT NULL,
+                monto REAL NOT NULL,
+                metodoPago TEXT DEFAULT 'Efectivo',
+                fecha DATETIME DEFAULT CURRENT_TIMESTAMP,
+                observaciones TEXT,
+                FOREIGN KEY (articuloId) REFERENCES articulos(id) ON DELETE CASCADE
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_abonos_articulo ON abonos(articuloId);
 
             CREATE TABLE IF NOT EXISTS auditoria (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -66,8 +84,8 @@ class DatabaseManager {
                 INSERT INTO articulos (
                     rut, nombreCliente, telefono, tipoArticulo, 
                     descripcion, numeroBodega, observaciones, 
-                    estado, fechaIngreso
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    estado, fechaIngreso, valorTotal, saldoPendiente
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `),
 
             obtenerTodos: this.db.prepare(`
@@ -115,10 +133,11 @@ class DatabaseManager {
         };
     }
 
-    // MÉTODOS PÚBLICOS
+    // MÉTODOS PÚBLICOS - ARTÍCULOS
 
     insertarArticulo(articulo) {
         try {
+            const valorTotal = articulo.valorTotal || 0;
             const result = this.statements.insertarArticulo.run(
                 articulo.rut,
                 articulo.nombreCliente,
@@ -128,13 +147,15 @@ class DatabaseManager {
                 articulo.numeroBodega.toUpperCase(),
                 articulo.observaciones || null,
                 articulo.estado || 'En Bodega',
-                articulo.fechaIngreso
+                articulo.fechaIngreso,
+                valorTotal,
+                valorTotal // saldoPendiente inicial = valorTotal
             );
 
             this.statements.registrarAuditoria.run(
                 result.lastInsertRowid,
                 'INSERTAR',
-                `Artículo creado: ${articulo.numeroBodega}`
+                `Artículo creado: ${articulo.numeroBodega} - Valor: $${valorTotal}`
             );
 
             return { success: true, id: result.lastInsertRowid };
@@ -222,6 +243,94 @@ class DatabaseManager {
         }
     }
 
+    // MÉTODOS DE PAGO Y ABONOS
+
+    registrarAbono(articuloId, monto, metodoPago = 'Efectivo', observaciones = '') {
+        try {
+            // Insertar abono
+            const insertAbono = this.db.prepare(`
+                INSERT INTO abonos (articuloId, monto, metodoPago, observaciones)
+                VALUES (?, ?, ?, ?)
+            `);
+            
+            insertAbono.run(articuloId, monto, metodoPago, observaciones);
+            
+            // Actualizar totales del artículo
+            const actualizarTotales = this.db.prepare(`
+                UPDATE articulos 
+                SET totalAbonado = totalAbonado + ?,
+                    saldoPendiente = valorTotal - (totalAbonado + ?),
+                    estadoPago = CASE
+                        WHEN (valorTotal - (totalAbonado + ?)) <= 0 THEN 'Pagado'
+                        WHEN (totalAbonado + ?) > 0 THEN 'Abonado'
+                        ELSE 'Sin pago'
+                    END,
+                    fechaModificacion = CURRENT_TIMESTAMP
+                WHERE id = ?
+            `);
+            
+            actualizarTotales.run(monto, monto, monto, monto, articuloId);
+            
+            // Registrar en auditoría
+            this.statements.registrarAuditoria.run(
+                articuloId,
+                'REGISTRAR_ABONO',
+                `Abono registrado: $${monto} (${metodoPago})`
+            );
+            
+            console.log(`✅ Abono registrado: $${monto} para artículo ${articuloId}`);
+            return { success: true };
+        } catch (error) {
+            console.error('Error al registrar abono:', error);
+            return { success: false, error: error.message };
+        }
+    }
+
+    obtenerAbonosArticulo(articuloId) {
+        try {
+            const getAbonos = this.db.prepare(`
+                SELECT * FROM abonos 
+                WHERE articuloId = ? 
+                ORDER BY fecha DESC
+            `);
+            
+            return getAbonos.all(articuloId);
+        } catch (error) {
+            console.error('Error al obtener abonos:', error);
+            return [];
+        }
+    }
+
+    actualizarValorTotal(articuloId, nuevoValor) {
+        try {
+            const actualizar = this.db.prepare(`
+                UPDATE articulos 
+                SET valorTotal = ?,
+                    saldoPendiente = ? - totalAbonado,
+                    estadoPago = CASE
+                        WHEN (? - totalAbonado) <= 0 THEN 'Pagado'
+                        WHEN totalAbonado > 0 THEN 'Abonado'
+                        ELSE 'Sin pago'
+                    END,
+                    fechaModificacion = CURRENT_TIMESTAMP
+                WHERE id = ?
+            `);
+            
+            actualizar.run(nuevoValor, nuevoValor, nuevoValor, articuloId);
+            
+            this.statements.registrarAuditoria.run(
+                articuloId,
+                'ACTUALIZAR_VALOR',
+                `Valor total actualizado a: $${nuevoValor}`
+            );
+            
+            return { success: true };
+        } catch (error) {
+            console.error('Error al actualizar valor:', error);
+            return { success: false, error: error.message };
+        }
+    }
+
     // BACKUP AUTOMÁTICO
     crearBackup() {
         try {
@@ -282,7 +391,9 @@ class DatabaseManager {
                             articulo.numeroBodega,
                             articulo.observaciones || null,
                             articulo.estado,
-                            articulo.fechaIngreso
+                            articulo.fechaIngreso,
+                            0, // valorTotal
+                            0  // saldoPendiente
                         );
                     } catch (e) {
                         console.warn(`Error migrando artículo ${articulo.numeroBodega}:`, e.message);

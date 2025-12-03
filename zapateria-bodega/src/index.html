@@ -12,7 +12,7 @@
     <div class="container">
         <div class="header">
             <h1>🥾 Sistema de Bodega - Zapatería</h1>
-            <p>Gestión profesional con SQLite + Dropbox</p>
+            <p>Gestión profesional con SQLite + Dropbox + Pagos</p>
             <span class="badge">✅ Base de datos segura</span>
         </div>
 
@@ -68,6 +68,12 @@
                         </div>
 
                         <div class="form-group">
+                            <label>Valor del Servicio 💰</label>
+                            <input type="number" id="valorTotal" placeholder="Ej: 15000" min="0" step="100">
+                            <small style="color: #666;">Dejar en 0 si no aplica</small>
+                        </div>
+
+                        <div class="form-group full-width">
                             <label>Observaciones</label>
                             <input type="text" id="observaciones" placeholder="Información adicional (opcional)">
                         </div>
@@ -217,27 +223,59 @@
         </div>
     </div>
 
+    <!-- MODAL DE PAGOS -->
+    <div id="modalPago" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalPagoTitle">Gestión de Pagos</h2>
+                <span class="close" onclick="cerrarModalPago()">&times;</span>
+            </div>
+
+            <!-- Información del pago -->
+            <div id="pagoInfoModal"></div>
+
+            <!-- Formulario para actualizar valor total -->
+            <div class="form-pago">
+                <h3>Actualizar Valor Total</h3>
+                <div class="input-group">
+                    <input type="number" id="nuevoValorTotal" placeholder="Nuevo valor total" min="0" step="100">
+                    <button class="btn btn-warning" onclick="actualizarValorServicio()">💲 Actualizar Valor</button>
+                </div>
+            </div>
+
+            <!-- Formulario para registrar abono -->
+            <div class="form-pago">
+                <h3>Registrar Nuevo Abono</h3>
+                <div class="form-group">
+                    <label>Monto del Abono</label>
+                    <input type="number" id="montoAbono" placeholder="Ej: 5000" min="1" step="100" required>
+                </div>
+                <div class="form-group">
+                    <label>Método de Pago</label>
+                    <select id="metodoPago">
+                        <option value="Efectivo">Efectivo</option>
+                        <option value="Tarjeta Débito">Tarjeta Débito</option>
+                        <option value="Tarjeta Crédito">Tarjeta Crédito</option>
+                        <option value="Transferencia">Transferencia</option>
+                        <option value="Otro">Otro</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Observaciones</label>
+                    <input type="text" id="observacionesAbono" placeholder="Opcional">
+                </div>
+                <button class="btn btn-success" onclick="registrarNuevoAbono()">✅ Registrar Abono</button>
+            </div>
+
+            <!-- Historial de abonos -->
+            <div style="margin-top: 30px;">
+                <h3>Historial de Abonos</h3>
+                <div id="abonosList" class="abonos-list"></div>
+            </div>
+        </div>
+    </div>
+
     <!-- Cargar JavaScript -->
     <script src="js/renderer.js"></script>
 </body>
 </html>
-```
-
----
-
-## ✅ Resumen de lo que hicimos:
-
-### **Estructura final:**
-```
-zapateria-bodega/
-├── src/
-│   ├── css/
-│   │   └── styles.css          ✅ TODO el CSS
-│   ├── js/
-│   │   └── renderer.js         ✅ TODO el JavaScript del frontend
-│   ├── index.html              ✅ Solo HTML limpio
-│   ├── database.js             ✅ Lógica de SQLite
-│   ├── dropbox.js              ✅ Lógica de Dropbox
-│   └── preload.js              ✅ Puente seguro Electron
-├── main.js                      ✅ Proceso principal Electron
-└── package.json

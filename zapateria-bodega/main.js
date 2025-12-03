@@ -50,7 +50,7 @@ function createWindow() {
     mainWindow.loadFile('src/index.html');
     
     // Para desarrollo: descomentar para ver DevTools
-    mainWindow.webContents.openDevTools();
+    // mainWindow.webContents.openDevTools();
 
     mainWindow.maximize();
 }
@@ -169,6 +169,19 @@ ipcMain.handle('imprimir', async () => {
     if (mainWindow) {
         mainWindow.webContents.print();
     }
+});
+
+// Handlers IPC - Pagos y Abonos
+ipcMain.handle('pago:registrarAbono', async (event, articuloId, monto, metodoPago, observaciones) => {
+    return db.registrarAbono(articuloId, monto, metodoPago, observaciones);
+});
+
+ipcMain.handle('pago:obtenerAbonos', async (event, articuloId) => {
+    return db.obtenerAbonosArticulo(articuloId);
+});
+
+ipcMain.handle('pago:actualizarValor', async (event, articuloId, nuevoValor) => {
+    return db.actualizarValorTotal(articuloId, nuevoValor);
 });
 
 // Handlers IPC - Dropbox
