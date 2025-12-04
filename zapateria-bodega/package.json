@@ -1,61 +1,58 @@
 {
-  "name": "zapateria-bodega",
-  "version": "1.0.0",
-  "description": "Sistema de gestión de bodega para zapatería",
+  "name": "napoli-reparadora",
+  "version": "2.0.0",
+  "description": "Sistema de gestión de bodega para Napoli - Reparadora de Calzado",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "build": "electron-builder",
-    "build-win": "electron-builder --win --x64",
-    "build-mac": "electron-builder --mac"
+    "build": "electron-builder --mac --win",
+    "build-mac": "electron-builder --mac",
+    "build-win": "electron-builder --win"
   },
   "keywords": [
-    "zapateria",
+    "electron",
     "bodega",
-    "inventario"
+    "reparadora",
+    "calzado",
+    "napoli",
+    "sqlite"
   ],
-  "author": "Tu Nombre",
+  "author": "Diego Moreno",
   "license": "MIT",
   "devDependencies": {
-    "electron": "^39.2.4",
+    "electron": "^28.0.0",
     "electron-builder": "^24.9.1",
     "electron-rebuild": "^3.2.9"
   },
+  "dependencies": {
+    "better-sqlite3": "^9.2.2",
+    "dropbox": "^10.34.0",
+    "isomorphic-fetch": "^3.0.0",
+    "exceljs": "^4.4.0"
+  },
   "build": {
-    "appId": "com.zapateria.bodega",
-    "productName": "Zapateria Bodega",
+    "appId": "com.napoli.reparadora",
+    "productName": "Napoli Reparadora",
     "directories": {
       "output": "dist"
     },
     "files": [
-      "main.js",
-      "src/**/*"
+      "**/*",
+      "!**/*.map",
+      "!dist/**/*"
     ],
+    "mac": {
+      "category": "public.app-category.business",
+      "target": [
+        "dmg"
+      ],
+      "icon": "build/icon.icns"
+    },
     "win": {
       "target": [
-        {
-          "target": "nsis",
-          "arch": [
-            "x64"
-          ]
-        }
-      ]
-    },
-    "mac": {
-      "target": "dmg",
-      "category": "public.app-category.business"
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true
+        "nsis"
+      ],
+      "icon": "build/icon.ico"
     }
-  },
-  "dependencies": {
-    "better-sqlite3": "^12.5.0",
-    "dropbox": "^10.34.0",
-    "electron-store": "^11.0.2",
-    "isomorphic-fetch": "^3.0.0"
   }
 }

@@ -20,6 +20,18 @@ async function exportarJSONManual() {
     }
 }
 
+async function exportarExcel() {
+    mostrarNotificacion('⏳ Exportando a Excel...', false);
+    
+    const resultado = await window.electronAPI.exportarExcel();
+    
+    if (resultado.success) {
+        mostrarNotificacion(`✅ Excel exportado: ${resultado.filename}`);
+    } else {
+        mostrarNotificacion('❌ Error al exportar Excel: ' + resultado.error, true);
+    }
+}
+
 async function abrirCarpetaBackups() {
     await window.electronAPI.abrirCarpetaBackups();
 }
@@ -136,5 +148,19 @@ async function listarBackupsDropbox() {
         }
     } else {
         mostrarNotificacion('❌ Error al listar backups: ' + resultado.error, true);
+    }
+}
+
+async function subirBackupDropboxAhora() {
+    if (confirm('¿Deseas crear un backup y subirlo a Dropbox inmediatamente?')) {
+        mostrarNotificacion('⏳ Creando y subiendo backup...', false);
+        
+        const resultado = await window.electronAPI.dropboxSubirBackupAhora();
+        
+        if (resultado.success) {
+            mostrarNotificacion('✅ ' + resultado.mensaje);
+        } else {
+            mostrarNotificacion('❌ Error: ' + resultado.error, true);
+        }
     }
 }

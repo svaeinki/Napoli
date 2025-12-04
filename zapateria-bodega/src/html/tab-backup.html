@@ -17,7 +17,7 @@
             <li>Click en "Create app"</li>
             <li>Selecciona "Scoped access"</li>
             <li>Selecciona "Full Dropbox"</li>
-            <li>Dale un nombre: "ZapateriaBodega"</li>
+            <li>Dale un nombre: "ReparadoraNapoli"</li>
             <li>En la pestaña "Permissions", activa: files.content.write, files.content.read</li>
             <li>En "Settings" → "OAuth 2" → "Generated access token"</li>
             <li>Copia el token y pégalo aquí:</li>
@@ -31,6 +31,7 @@
     <!-- Acciones (se muestra solo si está conectado) -->
     <div id="dropboxActions" style="display: none;">
         <div class="backup-buttons">
+            <button class="btn btn-success" onclick="subirBackupDropboxAhora()">☁️ Subir Backup Ahora</button>
             <button class="btn btn-info" onclick="listarBackupsDropbox()">📋 Ver Backups en Dropbox</button>
             <button class="btn btn-danger" onclick="desconectarDropbox()">🔌 Desconectar</button>
         </div>
@@ -42,7 +43,7 @@
 <div class="backup-section">
     <h3>💾 Backups Locales</h3>
     <p style="margin-bottom: 15px; color: #666;">
-        Los backups se crean automáticamente cada 24 horas y se suben a Dropbox si está configurado.
+        Los backups se crean automáticamente cada 24 horas. También puedes crear backups manuales cuando quieras.
     </p>
     <div class="backup-buttons">
         <button class="btn btn-primary" onclick="crearBackupManual()">📦 Crear Backup DB</button>
@@ -51,13 +52,16 @@
     </div>
 </div>
 
-<!-- MIGRACIÓN -->
+<!-- EXPORTACIÓN -->
 <div class="backup-section" style="margin-top: 20px;">
-    <h3>🔄 Migrar desde LocalStorage</h3>
+    <h3>📊 Exportar Datos</h3>
     <p style="margin-bottom: 15px; color: #666;">
-        Si tenías datos en la versión anterior con LocalStorage, puedes migrarlos aquí (solo una vez):
+        Exporta tu inventario completo en diferentes formatos para análisis o respaldo.
     </p>
-    <button class="btn btn-warning" onclick="migrarDesdeLocalStorage()">⚠️ Migrar Datos Antiguos</button>
+    <div class="backup-buttons">
+        <button class="btn btn-success" onclick="exportarExcel()">📗 Exportar a Excel (.xlsx)</button>
+        <button class="btn btn-info" onclick="exportarDatos()">📄 Exportar a CSV</button>
+    </div>
 </div>
 
 <!-- INFORMACIÓN -->
@@ -70,5 +74,6 @@
         <li>✅ Backups antiguos se eliminan automáticamente</li>
         <li>✅ Si Dropbox está configurado, se suben automáticamente</li>
         <li>✅ Los backups en Dropbox nunca se eliminan automáticamente</li>
+        <li>✅ Puedes subir backups manualmente a Dropbox cuando quieras</li>
     </ul>
 </div>

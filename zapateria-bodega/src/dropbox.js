@@ -5,33 +5,86 @@ const path = require('path');
 
 class DropboxManager {
     constructor(accessToken) {
-        if (accessToken) {
-            this.dbx = new Dropbox({ 
-                accessToken: accessToken,
-                fetch: fetch 
-            });
-            this.configurado = true;
-        } else {
-            this.dbx = null;
-            this.configurado = false;
+        this.accessToken = accessToken;
+        this.dbx = new Dropbox({ accessToken, fetch });
+        this.configurado = !!accessToken;
+        console.log('📦 Dropbox Manager inicializado');
+    }
+
+    estaConfigurado() {
+        return this.configurado && !!this.accessToken;
+    }
+
+    async verificarConexion() {
+        if (!this.configurado) {
+            return { success: false, error: 'No configurado' };
+        }
+
+        try {
+            const response = await this.dbx.usersGetCurrentAccount();
+            console.log('✅ Dropbox conectado:', response.result.name.display_name);
+            return { 
+                success: true, 
+                usuario: response.result.name.display_name,
+                email: response.result.email
+            };
+        } catch (error) {
+            console.error('❌ Error conectando a Dropbox:', error);
+            return { 
+                success: false, 
+                error: error.message || 'Error de conexión'
+            };
         }
     }
 
-    // Verificar si está configurado
-    estaConfigurado() {
-        return this.configurado;
+    async subirBackupDB(archivoLocal) {
+        if (!this.configurado) {
+            return { success: false, error: 'Dropbox no configurado' };
+        }
+
+        try {
+            const contenido = fs.readFileSync(archivoLocal);
+            const nombreArchivo = path.basename(archivoLocal);
+            
+            const response = await this.dbx.filesUpload({
+                path: `/NapoliReparadora/Backups/${nombreArchivo}`,
+                contents: contenido,
+                mode: 'overwrite',
+                autorename: true
+            });
+
+            console.log(`✅ Backup DB subido a Dropbox: ${nombreArchivo}`);
+            return { success: true, response };
+        } catch (error) {
+            console.error('❌ Error al subir backup DB:', error);
+            return { success: false, error: error.message };
+        }
     }
 
-    // Configurar token
-    configurarToken(accessToken) {
-        this.dbx = new Dropbox({ 
-            accessToken: accessToken,
-            fetch: fetch 
-        });
-        this.configurado = true;
+    async subirBackupJSON(archivoLocal) {
+        if (!this.configurado) {
+            return { success: false, error: 'Dropbox no configurado' };
+        }
+
+        try {
+            const contenido = fs.readFileSync(archivoLocal);
+            const nombreArchivo = path.basename(archivoLocal);
+            
+            const response = await this.dbx.filesUpload({
+                path: `/NapoliReparadora/Exports/${nombreArchivo}`,
+                contents: contenido,
+                mode: 'overwrite',
+                autorename: true
+            });
+
+            console.log(`✅ JSON subido a Dropbox: ${nombreArchivo}`);
+            return { success: true, response };
+        } catch (error) {
+            console.error('❌ Error al subir JSON:', error);
+            return { success: false, error: error.message };
+        }
     }
 
-    // Subir archivo
     async subirArchivo(archivoLocal, rutaDropbox) {
         if (!this.configurado) {
             return { success: false, error: 'Dropbox no configurado' };
@@ -50,26 +103,11 @@ class DropboxManager {
             console.log(`✅ Archivo subido a Dropbox: ${rutaDropbox}`);
             return { success: true, response };
         } catch (error) {
-            console.error('❌ Error al subir a Dropbox:', error);
+            console.error('❌ Error al subir archivo:', error);
             return { success: false, error: error.message };
         }
     }
 
-    // Subir backup JSON
-    async subirBackupJSON(archivoLocal) {
-        const nombreArchivo = path.basename(archivoLocal);
-        const rutaDropbox = `/ZapateriaBodega/Backups/${nombreArchivo}`;
-        return await this.subirArchivo(archivoLocal, rutaDropbox);
-    }
-
-    // Subir backup DB
-    async subirBackupDB(archivoLocal) {
-        const nombreArchivo = path.basename(archivoLocal);
-        const rutaDropbox = `/ZapateriaBodega/Backups/${nombreArchivo}`;
-        return await this.subirArchivo(archivoLocal, rutaDropbox);
-    }
-
-    // Listar archivos en Dropbox
     async listarBackups() {
         if (!this.configurado) {
             return { success: false, error: 'Dropbox no configurado' };
@@ -77,74 +115,42 @@ class DropboxManager {
 
         try {
             const response = await this.dbx.filesListFolder({
-                path: '/ZapateriaBodega/Backups'
+                path: '/NapoliReparadora/Backups'
             });
 
-            return { success: true, archivos: response.result.entries };
+            const archivos = response.result.entries.map(entry => ({
+                name: entry.name,
+                path: entry.path_display,
+                size: entry.size,
+                client_modified: entry.client_modified
+            }));
+
+            console.log(`✅ Encontrados ${archivos.length} backups en Dropbox`);
+            return { success: true, archivos };
         } catch (error) {
             if (error.status === 409) {
-                // La carpeta no existe, está vacía
+                console.log('📁 Carpeta de backups no existe aún en Dropbox');
                 return { success: true, archivos: [] };
             }
-            console.error('Error al listar archivos:', error);
+            console.error('❌ Error al listar backups:', error);
             return { success: false, error: error.message };
         }
     }
 
-    // Descargar backup desde Dropbox
-    async descargarBackup(rutaDropbox, destinoLocal) {
+    async descargarBackup(rutaDropbox, rutaLocal) {
         if (!this.configurado) {
             return { success: false, error: 'Dropbox no configurado' };
         }
 
         try {
             const response = await this.dbx.filesDownload({ path: rutaDropbox });
-            fs.writeFileSync(destinoLocal, response.result.fileBinary);
+            fs.writeFileSync(rutaLocal, response.result.fileBinary, 'binary');
             
-            console.log(`✅ Backup descargado: ${destinoLocal}`);
-            return { success: true };
+            console.log(`✅ Backup descargado: ${path.basename(rutaLocal)}`);
+            return { success: true, path: rutaLocal };
         } catch (error) {
-            console.error('Error al descargar:', error);
+            console.error('❌ Error al descargar backup:', error);
             return { success: false, error: error.message };
-        }
-    }
-
-    // Verificar conexión
-    async verificarConexion() {
-        if (!this.configurado) {
-            return { success: false, error: 'Dropbox no configurado' };
-        }
-
-        try {
-            console.log('🔍 Verificando conexión con Dropbox...');
-            
-            // Timeout de 5 segundos
-            const timeoutPromise = new Promise((_, reject) => 
-                setTimeout(() => reject(new Error('Timeout: La conexión tardó demasiado')), 5000)
-            );
-            
-            const verifyPromise = this.dbx.usersGetCurrentAccount();
-            
-            const response = await Promise.race([verifyPromise, timeoutPromise]);
-            
-            console.log('✅ Conectado a Dropbox:', response.result.name.display_name);
-            return { 
-                success: true, 
-                usuario: response.result.name.display_name,
-                email: response.result.email
-            };
-        } catch (error) {
-            console.error('❌ Error al verificar conexión Dropbox:', error.message);
-            
-            if (error.message && error.message.includes('Timeout')) {
-                return { success: false, error: 'La conexión tardó demasiado. Verifica tu internet.' };
-            }
-            
-            if (error.status === 401) {
-                return { success: false, error: 'Token inválido o expirado' };
-            }
-            
-            return { success: false, error: error.message || 'Error desconocido' };
         }
     }
 }

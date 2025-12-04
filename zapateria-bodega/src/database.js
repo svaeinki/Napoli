@@ -1,31 +1,24 @@
 const Database = require('better-sqlite3');
 const path = require('path');
-const fs = require('fs');
-const { app } = require('electron');
 
+/**
+ * Sistema de Base de Datos para Napoli - Reparadora de Calzado
+ * Gestión completa de artículos, pagos, abonos y auditoría
+ */
 class DatabaseManager {
-    constructor() {
-        // Rutas
-        const userDataPath = app.getPath('userData');
-        this.dbPath = path.join(userDataPath, 'zapateria.db');
-        this.backupPath = path.join(userDataPath, 'backups');
-
-        // Crear carpeta de backups
-        if (!fs.existsSync(this.backupPath)) {
-            fs.mkdirSync(this.backupPath, { recursive: true });
-        }
-
-        // Inicializar base de datos
-        this.db = new Database(this.dbPath);
+    constructor(dbPath) {
+        this.db = new Database(dbPath);
         this.db.pragma('journal_mode = WAL');
         this.db.pragma('foreign_keys = ON');
-
-        // Crear tablas
+        
+        console.log('📊 Base de datos Napoli conectada:', dbPath);
+        
         this.inicializarTablas();
         this.prepararStatements();
     }
 
     inicializarTablas() {
+        // Crear tablas base
         this.db.exec(`
             CREATE TABLE IF NOT EXISTS articulos (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -40,13 +33,7 @@ class DatabaseManager {
                 fechaIngreso TEXT NOT NULL,
                 fechaEntrega TEXT,
                 fechaCreacion DATETIME DEFAULT CURRENT_TIMESTAMP,
-                fechaModificacion DATETIME,
-                
-                -- CAMPOS DE PAGO
-                valorTotal REAL DEFAULT 0,
-                totalAbonado REAL DEFAULT 0,
-                saldoPendiente REAL DEFAULT 0,
-                estadoPago TEXT DEFAULT 'Sin pago' CHECK(estadoPago IN ('Sin pago', 'Abonado', 'Pagado'))
+                fechaModificacion DATETIME
             );
 
             CREATE INDEX IF NOT EXISTS idx_rut ON articulos(rut);
@@ -75,6 +62,29 @@ class DatabaseManager {
             );
         `);
 
+        // MIGRACIÓN: Agregar columnas de pago si no existen
+        try {
+            // Verificar si las columnas existen
+            const tableInfo = this.db.prepare("PRAGMA table_info(articulos)").all();
+            const columnas = tableInfo.map(col => col.name);
+
+            // Agregar columnas nuevas si no existen
+            if (!columnas.includes('valorTotal')) {
+                console.log('📊 Migrando base de datos: agregando columnas de pago...');
+                
+                this.db.exec(`
+                    ALTER TABLE articulos ADD COLUMN valorTotal REAL DEFAULT 0;
+                    ALTER TABLE articulos ADD COLUMN totalAbonado REAL DEFAULT 0;
+                    ALTER TABLE articulos ADD COLUMN saldoPendiente REAL DEFAULT 0;
+                    ALTER TABLE articulos ADD COLUMN estadoPago TEXT DEFAULT 'Sin pago' CHECK(estadoPago IN ('Sin pago', 'Abonado', 'Pagado'));
+                `);
+                
+                console.log('✅ Migración completada: columnas de pago agregadas');
+            }
+        } catch (error) {
+            console.error('Error en migración:', error);
+        }
+
         console.log('✅ Tablas inicializadas correctamente');
     }
 
@@ -84,8 +94,8 @@ class DatabaseManager {
                 INSERT INTO articulos (
                     rut, nombreCliente, telefono, tipoArticulo, 
                     descripcion, numeroBodega, observaciones, 
-                    estado, fechaIngreso, valorTotal, saldoPendiente
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    estado, fechaIngreso, valorTotal, saldoPendiente, estadoPago
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `),
 
             obtenerTodos: this.db.prepare(`
@@ -133,11 +143,15 @@ class DatabaseManager {
         };
     }
 
+    // ============================================
     // MÉTODOS PÚBLICOS - ARTÍCULOS
+    // ============================================
 
-    insertarArticulo(articulo) {
+    insertar(articulo) {
         try {
             const valorTotal = articulo.valorTotal || 0;
+            const estadoPago = valorTotal > 0 ? 'Sin pago' : 'Sin pago';
+            
             const result = this.statements.insertarArticulo.run(
                 articulo.rut,
                 articulo.nombreCliente,
@@ -149,7 +163,8 @@ class DatabaseManager {
                 articulo.estado || 'En Bodega',
                 articulo.fechaIngreso,
                 valorTotal,
-                valorTotal // saldoPendiente inicial = valorTotal
+                valorTotal, // saldoPendiente inicial = valorTotal
+                estadoPago
             );
 
             this.statements.registrarAuditoria.run(
@@ -243,7 +258,9 @@ class DatabaseManager {
         }
     }
 
+    // ============================================
     // MÉTODOS DE PAGO Y ABONOS
+    // ============================================
 
     registrarAbono(articuloId, monto, metodoPago = 'Efectivo', observaciones = '') {
         try {
@@ -331,50 +348,10 @@ class DatabaseManager {
         }
     }
 
-    // BACKUP AUTOMÁTICO
-    crearBackup() {
-        try {
-            const fecha = new Date().toISOString().split('T')[0];
-            const hora = new Date().toTimeString().split(' ')[0].replace(/:/g, '-');
-            const backupFile = path.join(this.backupPath, `backup-${fecha}-${hora}.db`);
-            
-            this.db.backup(backupFile);
-            
-            console.log(`✅ Backup creado: ${backupFile}`);
-            return { success: true, path: backupFile };
-        } catch (error) {
-            console.error('❌ Error al crear backup:', error);
-            return { success: false, error: error.message };
-        }
-    }
+    // ============================================
+    // MIGRACIÓN DESDE LOCALSTORAGE
+    // ============================================
 
-    // EXPORTAR A JSON (para Dropbox)
-    exportarJSON() {
-        try {
-            const articulos = this.statements.obtenerTodos.all();
-            const fecha = new Date().toISOString().split('T')[0];
-            const hora = new Date().toTimeString().split(' ')[0].replace(/:/g, '-');
-            const filename = `backup-zapateria-${fecha}-${hora}.json`;
-            const filepath = path.join(this.backupPath, filename);
-            
-            const datos = {
-                version: '1.0',
-                fecha: new Date().toISOString(),
-                totalArticulos: articulos.length,
-                articulos: articulos
-            };
-            
-            fs.writeFileSync(filepath, JSON.stringify(datos, null, 2));
-            
-            console.log(`✅ JSON exportado: ${filepath}`);
-            return { success: true, path: filepath, filename: filename };
-        } catch (error) {
-            console.error('❌ Error al exportar JSON:', error);
-            return { success: false, error: error.message };
-        }
-    }
-
-    // MIGRAR DESDE LOCALSTORAGE (usar solo una vez)
     migrarDesdeLocalStorage(articulosJSON) {
         try {
             const articulos = JSON.parse(articulosJSON);
@@ -393,7 +370,8 @@ class DatabaseManager {
                             articulo.estado,
                             articulo.fechaIngreso,
                             0, // valorTotal
-                            0  // saldoPendiente
+                            0, // saldoPendiente
+                            'Sin pago' // estadoPago
                         );
                     } catch (e) {
                         console.warn(`Error migrando artículo ${articulo.numeroBodega}:`, e.message);
@@ -409,43 +387,6 @@ class DatabaseManager {
             console.error('❌ Error en migración:', error);
             return { success: false, error: error.message };
         }
-    }
-
-    // LIMPIAR BACKUPS ANTIGUOS (mantener solo 30 días)
-    limpiarBackupsAntiguos() {
-        try {
-            const archivos = fs.readdirSync(this.backupPath);
-            const ahora = Date.now();
-            const treintaDias = 30 * 24 * 60 * 60 * 1000;
-            
-            let eliminados = 0;
-            archivos.forEach(archivo => {
-                const filepath = path.join(this.backupPath, archivo);
-                const stats = fs.statSync(filepath);
-                const edad = ahora - stats.mtimeMs;
-                
-                if (edad > treintaDias) {
-                    fs.unlinkSync(filepath);
-                    eliminados++;
-                }
-            });
-            
-            if (eliminados > 0) {
-                console.log(`🗑️ Backups antiguos eliminados: ${eliminados}`);
-            }
-            return { success: true, eliminados };
-        } catch (error) {
-            console.error('Error al limpiar backups:', error);
-            return { success: false, error: error.message };
-        }
-    }
-
-    getRutaDB() {
-        return this.dbPath;
-    }
-
-    getRutaBackups() {
-        return this.backupPath;
     }
 
     cerrar() {

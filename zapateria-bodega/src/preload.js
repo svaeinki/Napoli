@@ -1,42 +1,37 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
-// Exponer API segura al renderer
 contextBridge.exposeInMainWorld('electronAPI', {
-    // Artículos
+    // Base de datos
     insertarArticulo: (articulo) => ipcRenderer.invoke('db:insertar', articulo),
     obtenerTodos: () => ipcRenderer.invoke('db:obtenerTodos'),
     obtenerPorId: (id) => ipcRenderer.invoke('db:obtenerPorId', id),
-    buscar: (termino) => ipcRenderer.invoke('db:buscar', termino),
     actualizarEstado: (id, estado) => ipcRenderer.invoke('db:actualizarEstado', id, estado),
     eliminar: (id) => ipcRenderer.invoke('db:eliminar', id),
-    obtenerEstadisticas: () => ipcRenderer.invoke('db:estadisticas'),
-    
-    // Backups
-    crearBackup: () => ipcRenderer.invoke('db:crearBackup'),
-    exportarJSON: () => ipcRenderer.invoke('db:exportarJSON'),
-    abrirCarpetaBackups: () => ipcRenderer.invoke('db:abrirCarpetaBackups'),
-    
-    // Migración
-    migrarDesdeLocalStorage: (datos) => ipcRenderer.invoke('db:migrar', datos),
-    
-    // Imprimir
-    imprimir: () => ipcRenderer.invoke('imprimir'),
-    
-    // Pagos y Abonos
+    buscar: (termino) => ipcRenderer.invoke('db:buscar', termino),
+    obtenerEstadisticas: () => ipcRenderer.invoke('db:obtenerEstadisticas'),
+    migrarDesdeLocalStorage: (datos) => ipcRenderer.invoke('db:migrarDesdeLocalStorage', datos),
+
+    // Pagos y abonos
     pagoRegistrarAbono: (articuloId, monto, metodoPago, observaciones) => 
         ipcRenderer.invoke('pago:registrarAbono', articuloId, monto, metodoPago, observaciones),
-    pagoObtenerAbonos: (articuloId) => 
-        ipcRenderer.invoke('pago:obtenerAbonos', articuloId),
+    pagoObtenerAbonos: (articuloId) => ipcRenderer.invoke('pago:obtenerAbonos', articuloId),
     pagoActualizarValor: (articuloId, nuevoValor) => 
         ipcRenderer.invoke('pago:actualizarValor', articuloId, nuevoValor),
-    
+
+    // Backups
+    crearBackup: () => ipcRenderer.invoke('backup:crear'),
+    exportarJSON: () => ipcRenderer.invoke('backup:exportarJSON'),
+    exportarExcel: () => ipcRenderer.invoke('backup:exportarExcel'),
+    abrirCarpetaBackups: () => ipcRenderer.invoke('backup:abrirCarpeta'),
+
     // Dropbox
     dropboxConfigurar: (token) => ipcRenderer.invoke('dropbox:configurar', token),
     dropboxVerificar: () => ipcRenderer.invoke('dropbox:verificar'),
     dropboxEstaConfigurado: () => ipcRenderer.invoke('dropbox:estaConfigurado'),
+    dropboxDesconectar: () => ipcRenderer.invoke('dropbox:desconectar'),
     dropboxListarBackups: () => ipcRenderer.invoke('dropbox:listarBackups'),
-    dropboxDescargar: (rutaDropbox, destinoLocal) => ipcRenderer.invoke('dropbox:descargar', rutaDropbox, destinoLocal),
-    dropboxDesconectar: () => ipcRenderer.invoke('dropbox:desconectar')
-});
+    dropboxSubirBackupAhora: () => ipcRenderer.invoke('dropbox:subirBackupAhora'),
 
-console.log('✅ Preload script cargado');
+    // Impresión
+    imprimir: () => ipcRenderer.invoke('imprimir')
+});

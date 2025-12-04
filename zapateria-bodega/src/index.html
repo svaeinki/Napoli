@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistema de Bodega - Zapatería</title>
+    <title>Sistema de Bodega - Napoli</title>
     <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
@@ -11,9 +11,16 @@
 
     <div class="container">
         <div class="header">
-            <h1>🥾 Sistema de Bodega - Zapatería</h1>
-            <p>Gestión profesional con SQLite + Dropbox + Pagos</p>
-            <span class="badge">✅ Base de datos segura</span>
+            <div class="header-content">
+                <div>
+                    <h1>👞 Napoli - Reparadora de Calzado</h1>
+                    <p>Gestión profesional con SQLite + Dropbox + Pagos</p>
+                    <span class="badge">✅ Base de datos segura</span>
+                </div>
+                <button class="theme-toggle" onclick="toggleTheme()" title="Cambiar tema">
+                    <span id="themeIcon">🌙</span>
+                </button>
+            </div>
         </div>
 
         <div class="tabs">
@@ -40,6 +47,7 @@
 
     <!-- Cargar JavaScript modular -->
     <script src="js/templateLoader.js"></script>
+    <script src="js/theme.js"></script>
     <script src="js/utils.js"></script>
     <script src="js/validacion.js"></script>
     <script src="js/articulos.js"></script>

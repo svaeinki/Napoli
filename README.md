@@ -1,6 +1,6 @@
-# 🥾 Sistema de Bodega - Zapatería
+# 👞 Napoli - Reparadora de Calzado
 
-Sistema profesional de gestión de bodega para zapaterías con base de datos SQLite, backups automáticos en Dropbox y sistema completo de pagos y abonos.
+Sistema profesional de gestión de bodega para reparadora de calzado con base de datos SQLite, backups automáticos en Dropbox, sistema completo de pagos y abonos, y tema oscuro.
 
 ![Version](https://img.shields.io/badge/version-2.0.0-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
@@ -11,15 +11,18 @@ Sistema profesional de gestión de bodega para zapaterías con base de datos SQL
 ## ✨ Características Principales
 
 ### 📦 Gestión de Inventario
-- ✅ Registro completo de artículos (zapatos, bolsos, carteras, etc.)
+- ✅ Registro completo de artículos y servicios de reparación
+- ✅ Múltiples tipos de servicio (cambio suela, taco, costura, teñido, limpieza, etc.)
 - ✅ Asignación automática de números de bodega
 - ✅ Estados: "En Bodega" / "Entregado"
 - ✅ Búsqueda avanzada por RUT, nombre, número de bodega
 - ✅ Filtros por estado
 - ✅ Exportación a CSV
+- ✅ Contador de días en bodega con alertas visuales
 
 ### 💰 Sistema de Pagos y Abonos
 - ✅ Registro de valor total del servicio
+- ✅ Abonos iniciales al ingresar artículo
 - ✅ Abonos parciales con historial completo
 - ✅ Cálculo automático de saldo pendiente
 - ✅ Estados de pago: Sin pago / Abonado / Pagado
@@ -27,11 +30,17 @@ Sistema profesional de gestión de bodega para zapaterías con base de datos SQL
 - ✅ Historial detallado de cada abono
 - ✅ Tickets con desglose de pagos
 
+### 🔐 Validación y Seguridad
+- ✅ Validación de RUT chileno (dígito verificador)
+- ✅ Formato automático de RUT (12.345.678-9)
+- ✅ Formato automático de montos ($15.000)
+- ✅ Validación de duplicados
+
 ### 🖨️ Impresión de Tickets
 - ✅ Impresión automática al ingresar artículo
 - ✅ Reimpresión en cualquier momento
 - ✅ Información completa del cliente y artículo
-- ✅ Desglose de pagos si aplica
+- ✅ Desglose de pagos y saldo pendiente
 
 ### 💾 Base de Datos Robusta
 - ✅ SQLite - Base de datos profesional
@@ -47,6 +56,12 @@ Sistema profesional de gestión de bodega para zapaterías con base de datos SQL
 - ✅ Integración con Dropbox (opcional)
 - ✅ Sincronización automática en la nube
 - ✅ Retención de 30 días localmente
+
+### 🌙 Tema Oscuro
+- ✅ Toggle para cambiar entre tema claro y oscuro
+- ✅ Preferencia guardada automáticamente
+- ✅ Diseño adaptado para ambos temas
+- ✅ Transiciones suaves
 
 ---
 
@@ -141,16 +156,18 @@ npm start
 
 1. Click en **"➕ Ingresar Artículo"**
 2. Completa el formulario:
-   - RUT del cliente
+   - RUT del cliente (se valida y formatea automáticamente)
    - Nombre completo
    - Teléfono (opcional)
-   - Tipo de artículo
-   - Descripción detallada
+   - Tipo de servicio (reparación zapatos, cambio suela, etc.)
+   - Descripción detallada del artículo y reparación
    - Número de bodega (único)
-   - Valor del servicio (opcional)
+   - Valor del servicio (opcional, se formatea automáticamente)
+   - Abono inicial (opcional)
+   - Método de pago
    - Observaciones (opcional)
 3. Click en **"💾 Guardar e Imprimir Ticket"**
-4. El ticket se imprime automáticamente
+4. El ticket se imprime automáticamente con toda la información
 
 ### 2. Gestionar Pagos
 
@@ -163,24 +180,30 @@ npm start
    - Registrar abonos parciales
    - Ver historial completo de abonos
 
-### 3. Entregar Artículo
+### 3. Cambiar Tema
+
+1. Click en el botón **🌙** (o **☀️**) en la esquina superior derecha
+2. El tema cambia instantáneamente
+3. Tu preferencia se guarda automáticamente
+
+### 4. Entregar Artículo
 
 1. Ve a **"📦 Inventario"**
 2. Busca el artículo
 3. Click en **"✓ Entregar"**
 4. Confirma la entrega
 
-### 4. Buscar Artículos
+### 5. Buscar Artículos
 
 1. Ve a **"🔍 Buscar"**
 2. Ingresa cualquiera de:
    - RUT del cliente
    - Nombre del cliente
    - Número de bodega
-   - Tipo de artículo
+   - Tipo de servicio
 3. Los resultados aparecen en tiempo real
 
-### 5. Configurar Dropbox (Opcional)
+### 6. Configurar Dropbox (Opcional)
 
 1. Ve a **"💾 Backups"**
 2. Sigue las instrucciones para obtener un token
@@ -193,14 +216,30 @@ npm start
 ```
 zapateria-bodega/
 ├── src/
+│   ├── html/                    # Templates HTML modulares
+│   │   ├── tab-ingresar.html
+│   │   ├── tab-inventario.html
+│   │   ├── tab-buscar.html
+│   │   ├── tab-backup.html
+│   │   ├── modal-pagos.html
+│   │   └── ticket.html
 │   ├── css/
-│   │   └── styles.css          # Estilos de la aplicación
+│   │   └── styles.css           # Estilos con tema claro/oscuro
 │   ├── js/
-│   │   └── renderer.js         # Lógica del frontend
-│   ├── database.js             # Gestión de SQLite
-│   ├── dropbox.js              # Integración con Dropbox
-│   ├── preload.js              # Puente seguro Electron
-│   └── index.html              # Interfaz de usuario
+│   │   ├── templateLoader.js    # Cargador de templates
+│   │   ├── theme.js             # Sistema de temas
+│   │   ├── utils.js             # Utilidades generales
+│   │   ├── validacion.js        # Validación de RUT
+│   │   ├── articulos.js         # CRUD de artículos
+│   │   ├── inventario.js        # Gestión de inventario
+│   │   ├── pagos.js             # Sistema de pagos
+│   │   ├── busqueda.js          # Búsqueda de artículos
+│   │   ├── backups.js           # Backups y Dropbox
+│   │   └── main.js              # Inicialización
+│   ├── database.js              # Gestión de SQLite
+│   ├── dropbox.js               # Integración con Dropbox
+│   ├── preload.js               # Puente seguro Electron
+│   └── index.html               # Estructura principal
 ├── main.js                      # Proceso principal de Electron
 ├── package.json                 # Dependencias y scripts
 └── README.md                    # Este archivo
@@ -213,37 +252,37 @@ zapateria-bodega/
 ### macOS
 ```
 Base de datos:
-~/Library/Application Support/zapateria-bodega/zapateria.db
+~/Library/Application Support/napoli-reparadora/napoli.db
 
 Backups:
-~/Library/Application Support/zapateria-bodega/backups/
+~/Library/Application Support/napoli-reparadora/backups/
 
 Configuración:
-~/Library/Application Support/zapateria-bodega/config.json
+~/Library/Application Support/napoli-reparadora/config.json
 ```
 
 ### Windows
 ```
 Base de datos:
-C:\Users\TuUsuario\AppData\Roaming\zapateria-bodega\zapateria.db
+C:\Users\TuUsuario\AppData\Roaming\napoli-reparadora\napoli.db
 
 Backups:
-C:\Users\TuUsuario\AppData\Roaming\zapateria-bodega\backups\
+C:\Users\TuUsuario\AppData\Roaming\napoli-reparadora\backups\
 
 Configuración:
-C:\Users\TuUsuario\AppData\Roaming\zapateria-bodega\config.json
+C:\Users\TuUsuario\AppData\Roaming\napoli-reparadora\config.json
 ```
 
 ### Linux
 ```
 Base de datos:
-~/.config/zapateria-bodega/zapateria.db
+~/.config/napoli-reparadora/napoli.db
 
 Backups:
-~/.config/zapateria-bodega/backups/
+~/.config/napoli-reparadora/backups/
 
 Configuración:
-~/.config/zapateria-bodega/config.json
+~/.config/napoli-reparadora/config.json
 ```
 
 ---
@@ -254,13 +293,13 @@ Configuración:
 ```bash
 npm run build-mac
 ```
-Genera: `dist/Sistema de Bodega.dmg`
+Genera: `dist/Napoli Reparadora.dmg`
 
 ### Para Windows
 ```bash
 npm run build-win
 ```
-Genera: `dist/Sistema de Bodega Setup.exe`
+Genera: `dist/Napoli Reparadora Setup.exe`
 
 ### Para ambos (desde macOS con Wine)
 ```bash
@@ -275,7 +314,7 @@ npm run build
 - **SQLite** (better-sqlite3) - Base de datos embebida
 - **Dropbox SDK** - Sincronización en la nube
 - **Node.js** - Runtime de JavaScript
-- **HTML/CSS/JavaScript** - Frontend
+- **HTML/CSS/JavaScript** - Frontend modular
 
 ---
 
@@ -309,8 +348,8 @@ npm install --global windows-build-tools
 ### La aplicación no guarda datos
 
 **Solución:** Verifica que tienes permisos de escritura en:
-- macOS: `~/Library/Application Support/zapateria-bodega/`
-- Windows: `C:\Users\TuUsuario\AppData\Roaming\zapateria-bodega\`
+- macOS: `~/Library/Application Support/napoli-reparadora/`
+- Windows: `C:\Users\TuUsuario\AppData\Roaming\napoli-reparadora\`
 
 ### Dropbox no conecta
 
@@ -323,27 +362,32 @@ npm install --global windows-build-tools
 
 ## 📈 Roadmap / Mejoras Futuras
 
-- [ ] Validación de RUT chileno
-- [ ] Notificaciones de artículos con +30 días en bodega
-- [ ] Exportación a Excel
 - [ ] Códigos QR en tickets
+- [ ] Reportes en PDF
 - [ ] Dashboard con gráficos estadísticos
+- [ ] Notificaciones por email
 - [ ] Multi-usuario con roles y permisos
 - [ ] Versión móvil (Android/iOS) con Capacitor
 - [ ] Sincronización en tiempo real entre dispositivos
-- [ ] Sistema de reportes avanzados
+- [ ] Sistema de clientes recurrentes
 - [ ] Integración con impresoras térmicas
+- [ ] Exportación a Excel
 
 ---
 
 ## 📝 Changelog
 
 ### v2.0.0 (2024-12-03)
+- ✨ Sistema de tema claro/oscuro
+- ✨ Validación de RUT chileno
+- ✨ Formateo automático de montos
+- ✨ Abonos iniciales al ingresar artículo
+- ✨ Alertas visuales de artículos antiguos
+- ✨ Contador de días en bodega
+- ✨ Código modularizado (HTML, CSS, JS separados)
 - ✨ Sistema completo de pagos y abonos
 - ✨ Migración de LocalStorage a SQLite
 - ✨ Integración con Dropbox para backups
-- ✨ Código reorganizado (CSS, JS, HTML separados)
-- ✨ Sistema de auditoría completo
 - ✨ Backups automáticos cada 24 horas
 - 🐛 Correcciones de estabilidad
 
@@ -393,4 +437,5 @@ Gracias a todos los que han contribuido y probado esta aplicación.
 
 ---
 
-**¡Hecho con ❤️ en Chile 🇨🇱**
+**Napoli - Reparadora de Calzado**  
+**Hecho con ❤️ en Chile 🇨🇱**
