@@ -636,3 +636,13 @@ tbody tr:hover {
         padding: 20px;
     }
 }
+
+/* ============================================
+   FORMATEO DE INPUTS NUMÉRICOS
+   ============================================ */
+
+input[type="text"].numero-formateado {
+    text-align: right;
+    font-family: 'Courier New', monospace;
+    font-size: 18px;
+}

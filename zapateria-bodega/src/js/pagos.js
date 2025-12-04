@@ -68,7 +68,7 @@ async function registrarNuevoAbono() {
     const modal = document.getElementById('modalPago');
     const articuloId = parseInt(modal.dataset.articuloId);
     
-    const monto = parseFloat(document.getElementById('montoAbono').value);
+    const monto = obtenerValorNumerico(document.getElementById('montoAbono'));
     const metodoPago = document.getElementById('metodoPago').value;
     const observaciones = document.getElementById('observacionesAbono').value.trim();
 
@@ -96,7 +96,7 @@ async function actualizarValorServicio() {
     const modal = document.getElementById('modalPago');
     const articuloId = parseInt(modal.dataset.articuloId);
     
-    const nuevoValor = parseFloat(document.getElementById('nuevoValorTotal').value);
+    const nuevoValor = obtenerValorNumerico(document.getElementById('nuevoValorTotal'));
 
     if (!nuevoValor || nuevoValor < 0) {
         mostrarNotificacion('❌ Ingrese un valor válido', true);

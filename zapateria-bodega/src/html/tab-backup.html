@@ -1,0 +1,74 @@
+<h2>Gestión de Backups y Dropbox</h2>
+
+<!-- DROPBOX STATUS -->
+<div class="dropbox-config">
+    <h3>☁️ Dropbox</h3>
+    <div class="dropbox-status" id="dropboxStatus">
+        <span>Verificando conexión...</span>
+    </div>
+    
+    <!-- Configuración (se muestra solo si no está conectado) -->
+    <div id="dropboxConfig" style="display: none;">
+        <p style="margin-bottom: 10px; color: #666;">
+            Para obtener tu token de acceso:
+        </p>
+        <ol style="margin-bottom: 15px; color: #666; line-height: 1.8;">
+            <li>Ve a <a href="https://www.dropbox.com/developers/apps" target="_blank">Dropbox App Console</a></li>
+            <li>Click en "Create app"</li>
+            <li>Selecciona "Scoped access"</li>
+            <li>Selecciona "Full Dropbox"</li>
+            <li>Dale un nombre: "ZapateriaBodega"</li>
+            <li>En la pestaña "Permissions", activa: files.content.write, files.content.read</li>
+            <li>En "Settings" → "OAuth 2" → "Generated access token"</li>
+            <li>Copia el token y pégalo aquí:</li>
+        </ol>
+        <div class="input-group">
+            <input type="password" id="dropboxToken" placeholder="Pega tu token de Dropbox aquí">
+            <button class="btn btn-primary" onclick="configurarDropbox()">🔗 Conectar</button>
+        </div>
+    </div>
+
+    <!-- Acciones (se muestra solo si está conectado) -->
+    <div id="dropboxActions" style="display: none;">
+        <div class="backup-buttons">
+            <button class="btn btn-info" onclick="listarBackupsDropbox()">📋 Ver Backups en Dropbox</button>
+            <button class="btn btn-danger" onclick="desconectarDropbox()">🔌 Desconectar</button>
+        </div>
+        <div id="dropboxBackupsList" style="margin-top: 15px;"></div>
+    </div>
+</div>
+
+<!-- BACKUPS LOCALES -->
+<div class="backup-section">
+    <h3>💾 Backups Locales</h3>
+    <p style="margin-bottom: 15px; color: #666;">
+        Los backups se crean automáticamente cada 24 horas y se suben a Dropbox si está configurado.
+    </p>
+    <div class="backup-buttons">
+        <button class="btn btn-primary" onclick="crearBackupManual()">📦 Crear Backup DB</button>
+        <button class="btn btn-success" onclick="exportarJSONManual()">📄 Exportar JSON</button>
+        <button class="btn btn-info" onclick="abrirCarpetaBackups()">📁 Abrir Carpeta Backups</button>
+    </div>
+</div>
+
+<!-- MIGRACIÓN -->
+<div class="backup-section" style="margin-top: 20px;">
+    <h3>🔄 Migrar desde LocalStorage</h3>
+    <p style="margin-bottom: 15px; color: #666;">
+        Si tenías datos en la versión anterior con LocalStorage, puedes migrarlos aquí (solo una vez):
+    </p>
+    <button class="btn btn-warning" onclick="migrarDesdeLocalStorage()">⚠️ Migrar Datos Antiguos</button>
+</div>
+
+<!-- INFORMACIÓN -->
+<div class="backup-section" style="margin-top: 20px;">
+    <h3>ℹ️ Información</h3>
+    <ul style="line-height: 2; color: #666;">
+        <li>✅ Backups automáticos cada 24 horas</li>
+        <li>✅ Se guardan en formato .db (SQLite) y .json</li>
+        <li>✅ Se mantienen los últimos 30 días localmente</li>
+        <li>✅ Backups antiguos se eliminan automáticamente</li>
+        <li>✅ Si Dropbox está configurado, se suben automáticamente</li>
+        <li>✅ Los backups en Dropbox nunca se eliminan automáticamente</li>
+    </ul>
+</div>

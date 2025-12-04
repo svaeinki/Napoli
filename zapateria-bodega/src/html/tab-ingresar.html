@@ -1,0 +1,75 @@
+<h2 style="margin-bottom: 20px;">Ingresar Nuevo Artículo</h2>
+<form id="formIngresar" onsubmit="ingresarArticulo(event)">
+    <div class="form-grid">
+        <div class="form-group">
+            <label>RUT Cliente *</label>
+            <input type="text" id="rut" placeholder="Ej: 12345678-9" required 
+                   oninput="validarRUTEnTiempoReal(this)">
+            <small id="rutError" style="color: #dc3545; display: none; margin-top: 5px;">RUT inválido</small>
+        </div>
+
+        <div class="form-group">
+            <label>Nombre Cliente *</label>
+            <input type="text" id="nombreCliente" placeholder="Nombre completo" required>
+        </div>
+
+        <div class="form-group">
+            <label>Teléfono</label>
+            <input type="tel" id="telefono" placeholder="+56 9 1234 5678">
+        </div>
+
+        <div class="form-group">
+            <label>Tipo de Artículo *</label>
+            <select id="tipoArticulo" required>
+                <option value="">Seleccione...</option>
+                <option value="Zapatos">Zapatos</option>
+                <option value="Bolso">Bolso</option>
+                <option value="Cartera">Cartera</option>
+                <option value="Cinturón">Cinturón</option>
+                <option value="Maleta">Maleta</option>
+                <option value="Otro">Otro</option>
+            </select>
+        </div>
+
+        <div class="form-group full-width">
+            <label>Descripción del Artículo *</label>
+            <textarea id="descripcion" rows="3" placeholder="Ej: Zapatos negros marca XYZ, talla 40, con detalles en cuero" required></textarea>
+        </div>
+
+        <div class="form-group">
+            <label>Número de Bodega *</label>
+            <input type="text" id="numeroBodega" placeholder="Ej: A-123" required>
+        </div>
+
+        <div class="form-group">
+            <label>Valor del Servicio 💰</label>
+            <input type="text" id="valorTotal" placeholder="Ej: 15000" oninput="formatearNumeroInput(this)">
+            <small style="color: #666;">Dejar vacío o en 0 si no aplica</small>
+        </div>
+
+        <div class="form-group">
+            <label>Abono Inicial 💵</label>
+            <input type="text" id="abonoInicial" placeholder="Ej: 5000" oninput="formatearNumeroInput(this)">
+            <small style="color: #666;">Opcional - Se registrará al guardar</small>
+        </div>
+
+        <div class="form-group">
+            <label>Método de Pago del Abono</label>
+            <select id="metodoPagoInicial">
+                <option value="Efectivo">Efectivo</option>
+                <option value="Tarjeta Débito">Tarjeta Débito</option>
+                <option value="Tarjeta Crédito">Tarjeta Crédito</option>
+                <option value="Transferencia">Transferencia</option>
+                <option value="Otro">Otro</option>
+            </select>
+        </div>
+
+        <div class="form-group full-width">
+            <label>Observaciones</label>
+            <input type="text" id="observaciones" placeholder="Información adicional (opcional)">
+        </div>
+    </div>
+
+    <button type="submit" class="btn btn-primary">💾 Guardar e Imprimir Ticket</button>
+    <button type="reset" class="btn btn-info">🔄 Limpiar Formulario</button>
+</form>

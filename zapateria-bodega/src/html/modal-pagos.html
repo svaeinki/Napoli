@@ -1,0 +1,50 @@
+<div id="modalPago" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2 id="modalPagoTitle">Gestión de Pagos</h2>
+            <span class="close" onclick="cerrarModalPago()">&times;</span>
+        </div>
+
+        <!-- Información del pago -->
+        <div id="pagoInfoModal"></div>
+
+        <!-- Formulario para actualizar valor total -->
+        <div class="form-pago">
+            <h3>Actualizar Valor Total</h3>
+            <div class="input-group">
+                <input type="text" id="nuevoValorTotal" placeholder="Nuevo valor total" oninput="formatearNumeroInput(this)">
+                <button class="btn btn-warning" onclick="actualizarValorServicio()">💲 Actualizar Valor</button>
+            </div>
+        </div>
+
+        <!-- Formulario para registrar abono -->
+        <div class="form-pago">
+            <h3>Registrar Nuevo Abono</h3>
+            <div class="form-group">
+                <label>Monto del Abono</label>
+                <input type="text" id="montoAbono" placeholder="Ej: 5000" oninput="formatearNumeroInput(this)" required>
+            </div>
+            <div class="form-group">
+                <label>Método de Pago</label>
+                <select id="metodoPago">
+                    <option value="Efectivo">Efectivo</option>
+                    <option value="Tarjeta Débito">Tarjeta Débito</option>
+                    <option value="Tarjeta Crédito">Tarjeta Crédito</option>
+                    <option value="Transferencia">Transferencia</option>
+                    <option value="Otro">Otro</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Observaciones</label>
+                <input type="text" id="observacionesAbono" placeholder="Opcional">
+            </div>
+            <button class="btn btn-success" onclick="registrarNuevoAbono()">✅ Registrar Abono</button>
+        </div>
+
+        <!-- Historial de abonos -->
+        <div style="margin-top: 30px;">
+            <h3>Historial de Abonos</h3>
+            <div id="abonosList" class="abonos-list"></div>
+        </div>
+    </div>
+</div>

@@ -7,13 +7,27 @@ async function ingresarArticulo(e) {
 
     const rutInput = document.getElementById('rut').value.trim();
     
+    // Validar RUT
     if (!validarRUT(rutInput)) {
         mostrarNotificacion('❌ RUT inválido. Por favor verifica el RUT ingresado.', true);
         document.getElementById('rut').focus();
         return;
     }
 
-    const valorTotal = parseFloat(document.getElementById('valorTotal').value) || 0;
+    // Obtener valores numéricos sin formato
+    const valorTotal = obtenerValorNumerico(document.getElementById('valorTotal'));
+    const abonoInicial = obtenerValorNumerico(document.getElementById('abonoInicial'));
+
+    // Validar que el abono no sea mayor al valor total
+    if (abonoInicial > 0 && valorTotal === 0) {
+        mostrarNotificacion('❌ No puedes registrar un abono sin un valor total del servicio.', true);
+        return;
+    }
+
+    if (abonoInicial > valorTotal) {
+        mostrarNotificacion('❌ El abono inicial no puede ser mayor al valor total.', true);
+        return;
+    }
 
     const nuevoArticulo = {
         rut: formatearRUT(rutInput),
@@ -30,10 +44,20 @@ async function ingresarArticulo(e) {
     const resultado = await window.electronAPI.insertarArticulo(nuevoArticulo);
 
     if (resultado.success) {
+        const articuloId = resultado.id;
+
+        // Si hay abono inicial, registrarlo
+        if (abonoInicial > 0) {
+            const metodoPago = document.getElementById('metodoPagoInicial').value;
+            await window.electronAPI.pagoRegistrarAbono(articuloId, abonoInicial, metodoPago, 'Abono inicial al ingresar');
+        }
+
+        // Obtener artículo completo con abonos actualizados
+        const articuloCompleto = await window.electronAPI.obtenerPorId(articuloId);
+
         document.getElementById('formIngresar').reset();
         mostrarNotificacion('✅ Artículo ingresado correctamente. Imprimiendo ticket...');
         
-        const articuloCompleto = await window.electronAPI.obtenerPorId(resultado.id);
         generarTicket(articuloCompleto);
         
         setTimeout(() => {

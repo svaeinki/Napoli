@@ -66,3 +66,29 @@ function obtenerClaseAlerta(fechaIngreso) {
         return '';
     }
 }
+
+// ============================================
+// FORMATEO DE NÚMEROS
+// ============================================
+
+function formatearNumeroInput(input) {
+    // Eliminar todo excepto números
+    let valor = input.value.replace(/\D/g, '');
+    
+    // Si está vacío, dejarlo vacío
+    if (valor === '') {
+        input.value = '';
+        return;
+    }
+    
+    // Convertir a número
+    const numero = parseInt(valor);
+    
+    // Formatear con separadores de miles
+    input.value = new Intl.NumberFormat('es-CL').format(numero);
+}
+
+function obtenerValorNumerico(inputElement) {
+    const valor = inputElement.value.replace(/\./g, '').replace(/,/g, '');
+    return parseInt(valor) || 0;
+}
