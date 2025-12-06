@@ -1,0 +1,145 @@
+/* =========================================
+   ESTILOS DE TICKETS TÉRMICOS
+   ========================================= */
+
+/* Ocultar en pantalla normal, solo visible al imprimir o en preview */
+@media screen {
+    .ticket-container {
+        display: none;
+    }
+    
+    /* Configuración para el preview en modal */
+    #ticket {
+        background: white;
+        padding: 10px;
+        max-width: 300px;
+        margin: 0 auto;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        border: 1px solid #ddd;
+    }
+}
+
+@media print {
+    body * {
+        visibility: hidden;
+    }
+    
+    .ticket-container, .ticket-container * {
+        visibility: visible;
+    }
+
+    .ticket-container {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        margin: 0;
+        padding: 0;
+    }
+}
+
+.ticket-content {
+    font-family: 'Courier New', Courier, monospace; /* Fuente monoespaciada para tickets */
+    font-size: 12px;
+    line-height: 1.2;
+    color: black;
+    background: white;
+}
+
+/* Ancho configurable */
+.width-58mm {
+    width: 48mm; /* Margen de seguridad */
+    max-width: 58mm;
+}
+
+.width-80mm {
+    width: 72mm; /* Margen de seguridad */
+    max-width: 80mm;
+}
+
+/* Elementos comunes */
+.ticket-header {
+    text-align: center;
+    border-bottom: 2px dashed black;
+    padding-bottom: 10px;
+    margin-bottom: 10px;
+}
+
+.ticket-header h2 {
+    font-size: 16px;
+    margin: 0 0 5px 0;
+    text-transform: uppercase;
+}
+
+.ticket-header p {
+    margin: 0;
+    font-size: 12px;
+}
+
+.ticket-body {
+    margin-bottom: 15px;
+}
+
+.ticket-row {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 4px;
+}
+
+.ticket-label {
+    font-weight: bold;
+    margin-right: 5px;
+}
+
+.ticket-value {
+    text-align: right;
+    flex: 1;
+    word-break: break-all;
+}
+
+.ticket-divider {
+    border-top: 1px dashed black;
+    margin: 8px 0;
+}
+
+.ticket-big-text {
+    font-size: 16px;
+    font-weight: bold;
+    display: block;
+    text-align: center;
+    padding: 5px;
+    border: 2px solid black;
+    margin: 5px 0;
+    border-radius: 4px;
+}
+
+.ticket-totals {
+    border-top: 2px dashed black;
+    padding-top: 5px;
+    margin-top: 10px;
+}
+
+.ticket-total-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 14px;
+    margin-top: 4px;
+}
+
+.ticket-footer {
+    text-align: center;
+    border-top: 2px dashed black;
+    padding-top: 10px;
+    margin-top: 10px;
+}
+
+.ticket-qr {
+    text-align: center;
+    margin: 15px 0;
+}
+
+.ticket-qr img {
+    margin: 0 auto;
+    display: block;
+    max-width: 100%;
+}

@@ -1,6 +1,7 @@
 const { app, BrowserWindow, ipcMain, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const QRCode = require('qrcode');
 const DatabaseManager = require('./src/database');
 const DropboxManager = require('./src/dropbox');
 
@@ -66,7 +67,7 @@ function createWindow() {
 app.whenReady().then(() => {
     // Inicializar base de datos
     db = new DatabaseManager(DB_PATH);
-    
+
     // Inicializar Dropbox si está configurado
     const config = cargarConfiguracion();
     if (config.dropboxToken) {
@@ -174,7 +175,7 @@ function crearBackupAutomatico() {
     try {
         const timestamp = new Date().toISOString().replace(/:/g, '-').split('.')[0];
         const backupPath = path.join(BACKUPS_PATH, `napoli_backup_${timestamp}.db`);
-        
+
         fs.copyFileSync(DB_PATH, backupPath);
         console.log('✅ Backup automático creado:', backupPath);
 
@@ -197,7 +198,7 @@ function crearBackupManual() {
     try {
         const timestamp = new Date().toISOString().replace(/:/g, '-').split('.')[0];
         const backupPath = path.join(BACKUPS_PATH, `napoli_manual_${timestamp}.db`);
-        
+
         fs.copyFileSync(DB_PATH, backupPath);
         console.log('✅ Backup manual creado:', backupPath);
 
@@ -217,10 +218,10 @@ function exportarJSON() {
     try {
         const timestamp = new Date().toISOString().replace(/:/g, '-').split('.')[0];
         const jsonPath = path.join(BACKUPS_PATH, `napoli_export_${timestamp}.json`);
-        
+
         const datos = db.obtenerTodos();
         fs.writeFileSync(jsonPath, JSON.stringify(datos, null, 2));
-        
+
         console.log('✅ JSON exportado:', jsonPath);
 
         // Subir a Dropbox si está configurado
@@ -240,7 +241,7 @@ function exportarExcel() {
         const ExcelJS = require('exceljs');
         const timestamp = new Date().toISOString().replace(/:/g, '-').split('.')[0];
         const excelPath = path.join(BACKUPS_PATH, `napoli_inventario_${timestamp}.xlsx`);
-        
+
         const workbook = new ExcelJS.Workbook();
         const worksheet = workbook.addWorksheet('Inventario Napoli');
 
@@ -344,7 +345,7 @@ function subirBackupDropboxInmediato() {
 
         // Crear backup local primero
         const backupResult = crearBackupManual();
-        
+
         if (!backupResult.success) {
             return backupResult;
         }
@@ -386,12 +387,12 @@ ipcMain.handle('dropbox:configurar', async (event, token) => {
     try {
         dropboxManager = new DropboxManager(token);
         const verificacion = await dropboxManager.verificarConexion();
-        
+
         if (verificacion.success) {
             const config = cargarConfiguracion();
             config.dropboxToken = token;
             guardarConfiguracion(config);
-            
+
             return { success: true, usuario: verificacion.usuario };
         } else {
             return { success: false, error: verificacion.error };
@@ -432,12 +433,45 @@ ipcMain.handle('dropbox:subirBackupAhora', async () => {
 });
 
 // ============================================
+// HANDLERS IPC - CONFIGURACIÓN
+// ============================================
+
+ipcMain.handle('config:obtener', async () => {
+    return cargarConfiguracion();
+});
+
+ipcMain.handle('config:guardar', async (event, nuevaConfig) => {
+    try {
+        const config = cargarConfiguracion();
+        const configActualizada = { ...config, ...nuevaConfig };
+        guardarConfiguracion(configActualizada);
+        return { success: true };
+    } catch (error) {
+        console.error('Error guardando configuración:', error);
+        return { success: false, error: error.message };
+    }
+});
+
+// ============================================
 // HANDLER IPC - IMPRESIÓN
 // ============================================
 
 ipcMain.handle('imprimir', async () => {
     if (mainWindow) {
         mainWindow.webContents.print({ silent: false, printBackground: false });
+    }
+});
+
+// ============================================
+// HANDLER IPC - UTILIDADES
+// ============================================
+
+ipcMain.handle('util:generarQR', async (event, texto) => {
+    try {
+        return await QRCode.toDataURL(texto);
+    } catch (error) {
+        console.error('Error generando QR:', error);
+        return null;
     }
 });
 

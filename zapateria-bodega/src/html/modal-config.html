@@ -1,0 +1,69 @@
+<div id="modal-config" class="modal" style="display: none;">
+    <div class="modal-content">
+        <span class="close-modal" onclick="cerrarConfiguracion()">&times;</span>
+        <h2>⚙️ Configuración de Impresión</h2>
+
+        <div class="form-group">
+            <label>Ancho de Ticket</label>
+            <select id="configPrinterWidth">
+                <option value="58mm">58mm (Estándar)</option>
+                <option value="80mm">80mm (Ancho)</option>
+            </select>
+        </div>
+
+        <div class="form-group full-width">
+            <label>Encabezado del Ticket</label>
+            <textarea id="configTicketHeader" rows="3"></textarea>
+            <small>Puede usar saltos de línea.</small>
+        </div>
+
+        <div class="form-group full-width">
+            <label>Pie de Página del Ticket</label>
+            <textarea id="configTicketFooter" rows="3"></textarea>
+        </div>
+
+        <div style="margin-top: 20px; text-align: right;">
+            <button class="btn btn-primary" onclick="guardarConfiguracionImpresora()">💾 Guardar Configuración</button>
+            <button class="btn btn-info" onclick="pruebaImpresion()">🖨 Prueba</button>
+        </div>
+    </div>
+</div>
+
+<style>
+    /* Estilos básicos para el modal si no existen globalmente */
+    .modal {
+        position: fixed;
+        z-index: 1000;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.5);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+
+    .modal-content {
+        background-color: #fff;
+        padding: 20px;
+        border-radius: 8px;
+        width: 90%;
+        max-width: 500px;
+        position: relative;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+
+    .close-modal {
+        position: absolute;
+        right: 15px;
+        top: 10px;
+        font-size: 24px;
+        cursor: pointer;
+        color: #666;
+    }
+
+    .close-modal:hover {
+        color: #000;
+    }
+</style>

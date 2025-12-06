@@ -12,10 +12,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     migrarDesdeLocalStorage: (datos) => ipcRenderer.invoke('db:migrarDesdeLocalStorage', datos),
 
     // Pagos y abonos
-    pagoRegistrarAbono: (articuloId, monto, metodoPago, observaciones) => 
+    pagoRegistrarAbono: (articuloId, monto, metodoPago, observaciones) =>
         ipcRenderer.invoke('pago:registrarAbono', articuloId, monto, metodoPago, observaciones),
     pagoObtenerAbonos: (articuloId) => ipcRenderer.invoke('pago:obtenerAbonos', articuloId),
-    pagoActualizarValor: (articuloId, nuevoValor) => 
+    pagoActualizarValor: (articuloId, nuevoValor) =>
         ipcRenderer.invoke('pago:actualizarValor', articuloId, nuevoValor),
 
     // Backups
@@ -33,5 +33,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
     dropboxSubirBackupAhora: () => ipcRenderer.invoke('dropbox:subirBackupAhora'),
 
     // Impresión
-    imprimir: () => ipcRenderer.invoke('imprimir')
+    imprimir: () => ipcRenderer.invoke('imprimir'),
+
+    // Configuración
+    obtenerConfiguracion: () => ipcRenderer.invoke('config:obtener'),
+    guardarConfiguracion: (config) => ipcRenderer.invoke('config:guardar', config),
+
+    // Utilidades
+    generarQR: (texto) => ipcRenderer.invoke('util:generarQR', texto)
 });

@@ -32,7 +32,8 @@
     "better-sqlite3": "^11.5.0",
     "dropbox": "^10.34.0",
     "exceljs": "^4.4.0",
-    "isomorphic-fetch": "^3.0.0"
+    "isomorphic-fetch": "^3.0.0",
+    "qrcode": "^1.5.4"
   },
   "build": {
     "appId": "com.napoli.reparadora",

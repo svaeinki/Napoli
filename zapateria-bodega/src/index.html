@@ -1,11 +1,14 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sistema de Bodega - Napoli</title>
     <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="css/ticket.css">
 </head>
+
 <body>
     <div class="notification" id="notification"></div>
 
@@ -17,6 +20,10 @@
                     <p>Gestión profesional con SQLite + Dropbox + Pagos</p>
                     <span class="badge">✅ Base de datos segura</span>
                 </div>
+                <button class="theme-toggle" onclick="abrirConfiguracion()" title="Configuración"
+                    style="margin-right: 10px;">
+                    ⚙️
+                </button>
                 <button class="theme-toggle" onclick="toggleTheme()" title="Cambiar tema">
                     <span id="themeIcon">🌙</span>
                 </button>
@@ -55,6 +62,9 @@
     <script src="js/pagos.js"></script>
     <script src="js/busqueda.js"></script>
     <script src="js/backups.js"></script>
+    <script src="js/tickets.js"></script>
+    <script src="js/config.js"></script>
     <script src="js/main.js"></script>
 </body>
+
 </html>
