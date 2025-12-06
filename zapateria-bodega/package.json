@@ -20,9 +20,10 @@
   "author": "Diego Moreno",
   "license": "MIT",
   "devDependencies": {
+    "@electron/rebuild": "^3.6.0",
     "electron": "^28.0.0",
     "electron-builder": "^24.9.1",
-    "@electron/rebuild": "^3.6.0"
+    "electron-rebuild": "^3.2.9"
   },
   "overrides": {
     "node-gyp": "^10.0.0"
@@ -30,8 +31,8 @@
   "dependencies": {
     "better-sqlite3": "^11.5.0",
     "dropbox": "^10.34.0",
-    "isomorphic-fetch": "^3.0.0",
-    "exceljs": "^4.4.0"
+    "exceljs": "^4.4.0",
+    "isomorphic-fetch": "^3.0.0"
   },
   "build": {
     "appId": "com.napoli.reparadora",

@@ -10,9 +10,9 @@ class DatabaseManager {
         this.db = new Database(dbPath);
         this.db.pragma('journal_mode = WAL');
         this.db.pragma('foreign_keys = ON');
-        
+
         console.log('📊 Base de datos Napoli conectada:', dbPath);
-        
+
         this.inicializarTablas();
         this.prepararStatements();
     }
@@ -71,14 +71,14 @@ class DatabaseManager {
             // Agregar columnas nuevas si no existen
             if (!columnas.includes('valorTotal')) {
                 console.log('📊 Migrando base de datos: agregando columnas de pago...');
-                
+
                 this.db.exec(`
                     ALTER TABLE articulos ADD COLUMN valorTotal REAL DEFAULT 0;
                     ALTER TABLE articulos ADD COLUMN totalAbonado REAL DEFAULT 0;
                     ALTER TABLE articulos ADD COLUMN saldoPendiente REAL DEFAULT 0;
                     ALTER TABLE articulos ADD COLUMN estadoPago TEXT DEFAULT 'Sin pago' CHECK(estadoPago IN ('Sin pago', 'Abonado', 'Pagado'));
                 `);
-                
+
                 console.log('✅ Migración completada: columnas de pago agregadas');
             }
         } catch (error) {
@@ -114,6 +114,7 @@ class DatabaseManager {
                    OR tipoArticulo LIKE ?
                    OR descripcion LIKE ?
                 ORDER BY id DESC
+                LIMIT 50 -- Limitar resultados para mejorar rendimiento en UI
             `),
 
             actualizarEstado: this.db.prepare(`
@@ -151,7 +152,7 @@ class DatabaseManager {
         try {
             const valorTotal = articulo.valorTotal || 0;
             const estadoPago = valorTotal > 0 ? 'Sin pago' : 'Sin pago';
-            
+
             const result = this.statements.insertarArticulo.run(
                 articulo.rut,
                 articulo.nombreCliente,
@@ -213,7 +214,7 @@ class DatabaseManager {
 
     actualizarEstado(id, nuevoEstado) {
         try {
-            const fechaEntrega = nuevoEstado === 'Entregado' ? 
+            const fechaEntrega = nuevoEstado === 'Entregado' ?
                 new Date().toLocaleString('es-CL') : null;
 
             this.statements.actualizarEstado.run(nuevoEstado, fechaEntrega, id);
@@ -234,7 +235,7 @@ class DatabaseManager {
     eliminar(id) {
         try {
             const articulo = this.statements.obtenerPorId.get(id);
-            
+
             this.statements.registrarAuditoria.run(
                 id,
                 'ELIMINAR',
@@ -269,9 +270,9 @@ class DatabaseManager {
                 INSERT INTO abonos (articuloId, monto, metodoPago, observaciones)
                 VALUES (?, ?, ?, ?)
             `);
-            
+
             insertAbono.run(articuloId, monto, metodoPago, observaciones);
-            
+
             // Actualizar totales del artículo
             const actualizarTotales = this.db.prepare(`
                 UPDATE articulos 
@@ -285,16 +286,16 @@ class DatabaseManager {
                     fechaModificacion = CURRENT_TIMESTAMP
                 WHERE id = ?
             `);
-            
+
             actualizarTotales.run(monto, monto, monto, monto, articuloId);
-            
+
             // Registrar en auditoría
             this.statements.registrarAuditoria.run(
                 articuloId,
                 'REGISTRAR_ABONO',
                 `Abono registrado: $${monto} (${metodoPago})`
             );
-            
+
             console.log(`✅ Abono registrado: $${monto} para artículo ${articuloId}`);
             return { success: true };
         } catch (error) {
@@ -310,7 +311,7 @@ class DatabaseManager {
                 WHERE articuloId = ? 
                 ORDER BY fecha DESC
             `);
-            
+
             return getAbonos.all(articuloId);
         } catch (error) {
             console.error('Error al obtener abonos:', error);
@@ -332,15 +333,15 @@ class DatabaseManager {
                     fechaModificacion = CURRENT_TIMESTAMP
                 WHERE id = ?
             `);
-            
+
             actualizar.run(nuevoValor, nuevoValor, nuevoValor, articuloId);
-            
+
             this.statements.registrarAuditoria.run(
                 articuloId,
                 'ACTUALIZAR_VALOR',
                 `Valor total actualizado a: $${nuevoValor}`
             );
-            
+
             return { success: true };
         } catch (error) {
             console.error('Error al actualizar valor:', error);
@@ -355,7 +356,7 @@ class DatabaseManager {
     migrarDesdeLocalStorage(articulosJSON) {
         try {
             const articulos = JSON.parse(articulosJSON);
-            
+
             const migrar = this.db.transaction(() => {
                 for (const articulo of articulos) {
                     try {
@@ -378,9 +379,9 @@ class DatabaseManager {
                     }
                 }
             });
-            
+
             migrar();
-            
+
             console.log(`✅ Migrados ${articulos.length} artículos desde LocalStorage`);
             return { success: true, total: articulos.length };
         } catch (error) {

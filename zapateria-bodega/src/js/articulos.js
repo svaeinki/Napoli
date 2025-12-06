@@ -6,7 +6,7 @@ async function ingresarArticulo(e) {
     e.preventDefault();
 
     const rutInput = document.getElementById('rut').value.trim();
-    
+
     // Validar RUT
     if (!validarRUT(rutInput)) {
         mostrarNotificacion('❌ RUT inválido. Por favor verifica el RUT ingresado.', true);
@@ -57,13 +57,13 @@ async function ingresarArticulo(e) {
 
         document.getElementById('formIngresar').reset();
         mostrarNotificacion('✅ Artículo ingresado correctamente. Imprimiendo ticket...');
-        
+
         generarTicket(articuloCompleto);
-        
+
         setTimeout(() => {
             window.electronAPI.imprimir();
         }, 500);
-        
+
         await actualizarInventario();
     } else {
         mostrarNotificacion('❌ ' + resultado.error, true);
@@ -104,16 +104,21 @@ async function eliminarArticulo(id) {
 }
 
 function generarTicket(articulo) {
+    // Usar la función de escape en campos de texto libre
+    const clienteSeguro = escaparHtml(articulo.nombreCliente);
+    const descripcionSegura = escaparHtml(articulo.descripcion);
+    const obsSegura = escaparHtml(articulo.observaciones);
+    const tipoSeguro = escaparHtml(articulo.tipoArticulo);
     const contenido = `
         <p><strong>Ticket N°:</strong> ${String(articulo.id).padStart(4, '0')}</p>
         <p><strong>Fecha:</strong> ${articulo.fechaIngreso}</p>
-        <p style="margin-top: 10px;"><strong>Cliente:</strong> ${articulo.nombreCliente}</p>
+        <p style="margin-top: 10px;"><strong>Cliente:</strong> ${clienteSeguro}</p>
         <p><strong>RUT:</strong> ${articulo.rut}</p>
         <p><strong>Teléfono:</strong> ${articulo.telefono || 'No registrado'}</p>
-        <p style="margin-top: 10px;"><strong>Tipo:</strong> ${articulo.tipoArticulo}</p>
-        <p><strong>Descripción:</strong> ${articulo.descripcion}</p>
+        <p style="margin-top: 10px;"><strong>Tipo:</strong> ${tipoSeguro}</p>
+        <p><strong>Descripción:</strong> ${descripcionSegura}</p>
         <p style="margin-top: 10px; font-size: 18px;"><strong>Bodega:</strong> <span style="background: #ffc107; padding: 5px 10px; border-radius: 5px;">${articulo.numeroBodega}</span></p>
-        ${articulo.observaciones ? `<p><strong>Obs:</strong> ${articulo.observaciones}</p>` : ''}
+        ${articulo.observaciones ? `<p><strong>Obs:</strong> ${obsSegura}</p>` : ''}
         ${articulo.valorTotal > 0 ? `
             <p style="margin-top: 15px; padding-top: 15px; border-top: 2px dashed #000;">
                 <strong>VALOR TOTAL:</strong> $${formatearMoneda(articulo.valorTotal)}<br>
@@ -122,7 +127,7 @@ function generarTicket(articulo) {
             </p>
         ` : ''}
     `;
-    
+
     document.getElementById('ticketContenido').innerHTML = contenido;
     document.getElementById('ticket').style.display = 'block';
 }
