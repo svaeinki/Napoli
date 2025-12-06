@@ -56,38 +56,69 @@ Sistema profesional de gestión de bodega para reparadora de calzado con base de
 
 ---
 
-## 🚀 Instalación
+## 🚀 Instalación y Ejecución
 
-### Requisitos Previos
+Sigue las instrucciones específicas para tu sistema operativo para evitar problemas comunes de compilación.
 
-- **Node.js** (versión 16 o superior)
-- **Git** (para clonar el repositorio)
+### Requisitos Previos Generales
+- **Node.js**: Versión 16 o superior.
+- **Git**: Para clonar el repositorio.
 
-### Pasos de Instalación
+---
 
-#### 1. Clonar el repositorio
+###  Para Mac (macOS)
+
+#### 1. Requisitos Previos
+Asegúrate de tener instaladas las herramientas de línea de comandos de Xcode:
 ```bash
+xcode-select --install
+```
+
+#### 2. Instalación Paso a Paso
+Abre tu terminal y ejecuta:
+
+```bash
+# 1. Clonar el repositorio
 git clone https://github.com/svaeinki/Napoli.git
 cd Napoli/zapateria-bodega
-```
 
-#### 2. Instalar dependencias
-```bash
+# 2. Instalar dependencias
 npm install
+
+# 3. Compilar módulos nativos (CRUCIAL para SQLite)
+npm run rebuild
+
+# 4. Iniciar la aplicación
+npm start
 ```
 
-#### 3. Recompilar módulos nativos
-Es crucial para que SQLite funcione correctamente con Electron:
-```bash
-# macOS / Linux
-./node_modules/.bin/electron-rebuild
+---
 
-# Windows
-.\node_modules\.bin\electron-rebuild.cmd
-```
+### 🪟 Para Windows
 
-#### 4. Ejecutar la aplicación
-```bash
+#### 1. Requisitos Previos
+- **PowerShell** (Recomendado) o CMD.
+- **Herramientas de compilación de Windows**: Si tienes errores al instalar, es posible que necesites instalar las herramientas de compilación de Visual Studio. Puedes instalarlas ejecutando este comando en PowerShell como **Administrador**:
+  ```powershell
+  npm install --global --production windows-build-tools
+  ```
+  *(Nota: Esto puede tardar varios minutos)*
+
+#### 2. Instalación Paso a Paso
+
+```powershell
+# 1. Clonar el repositorio
+git clone https://github.com/svaeinki/Napoli.git
+cd Napoli/zapateria-bodega
+
+# 2. Instalar dependencias
+npm install
+
+# 3. Compilar módulos nativos
+# Si este paso falla, asegúrate de tener los requisitos previos arriba mencionados.
+npm run rebuild
+
+# 4. Iniciar la aplicación
 npm start
 ```
 
