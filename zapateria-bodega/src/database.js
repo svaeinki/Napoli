@@ -108,7 +108,8 @@ class DatabaseManager {
 
             buscar: this.db.prepare(`
                 SELECT * FROM articulos 
-                WHERE rut LIKE ? 
+                WHERE id = ?
+                   OR rut LIKE ? 
                    OR nombreCliente LIKE ? 
                    OR numeroBodega LIKE ?
                    OR tipoArticulo LIKE ?
@@ -134,7 +135,7 @@ class DatabaseManager {
                     COUNT(*) as total,
                     SUM(CASE WHEN estado = 'En Bodega' THEN 1 ELSE 0 END) as enBodega,
                     SUM(CASE WHEN estado = 'Entregado' THEN 1 ELSE 0 END) as entregados
-                FROM articulos
+            FROM articulos
             `),
 
             registrarAuditoria: this.db.prepare(`
@@ -205,7 +206,14 @@ class DatabaseManager {
     buscar(termino) {
         try {
             const patron = `%${termino}%`;
-            return this.statements.buscar.all(patron, patron, patron, patron, patron);
+            // Para el ID usamos el término exacto (si es número) o un valor imposible si no lo es
+            // Pero como SQLite es flexible con tipos, pasamos el termino tal cual. 
+            // Si termino es "abc", id = "abc" será falso.
+            // NOTA: id en DB es INTEGER, pero compararlo con string funciona en SQLite.
+            // Para mayor seguridad de tipos si termino es numerico lo casteamos?
+            // SQLite maneja '1' = 1 como true.
+
+            return this.statements.buscar.all(termino, patron, patron, patron, patron, patron);
         } catch (error) {
             console.error('Error al buscar:', error);
             return [];

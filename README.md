@@ -16,6 +16,7 @@ Sistema profesional de gestión de bodega para reparadora de calzado con base de
 - ✅ Asignación automática de números de bodega
 - ✅ Estados: "En Bodega" / "Entregado"
 - ✅ Búsqueda avanzada por RUT, nombre, número de bodega
+- ✅ **Búsqueda por Escáner QR/Código de Barras**
 - ✅ Filtros por estado
 - ✅ Exportación a CSV
 - ✅ Contador de días en bodega con alertas visuales
@@ -36,9 +37,11 @@ Sistema profesional de gestión de bodega para reparadora de calzado con base de
 - ✅ Formato automático de montos ($15.000)
 - ✅ Validación de duplicados
 
-### 🖨️ Impresión de Tickets
+### 🖨️ Impresión y QR
 - ✅ Impresión automática al ingresar artículo
 - ✅ Reimpresión en cualquier momento
+- ✅ **Códigos QR** únicos por ticket
+- ✅ **Vista Previa** de ticket en pantalla
 - ✅ Información completa del cliente y artículo
 - ✅ Desglose de pagos y saldo pendiente
 
@@ -201,7 +204,8 @@ npm start
    - Nombre del cliente
    - Número de bodega
    - Tipo de servicio
-3. Los resultados aparecen en tiempo real
+3. **Escáner**: Simplemente escanea el código QR del ticket en cualquier pantalla y la app buscará automáticamente.
+4. Los resultados aparecen en tiempo real
 
 ### 6. Configurar Dropbox (Opcional)
 
@@ -362,7 +366,8 @@ npm install --global windows-build-tools
 
 ## 📈 Roadmap / Mejoras Futuras
 
-- [ ] Códigos QR en tickets
+- [x] Códigos QR en tickets
+- [x] Integración con lectores de código de barras
 - [ ] Reportes en PDF
 - [ ] Dashboard con gráficos estadísticos
 - [ ] Notificaciones por email
@@ -376,6 +381,12 @@ npm install --global windows-build-tools
 ---
 
 ## 📝 Changelog
+
+### v2.1.0 (2025-12-07)
+- ✨ **Códigos QR** en todos los tickets
+- ✨ **Búsqueda rápida por escáner** (lector de código de barras)
+- ✨ **Vista Previa** de ticket en pantalla (ideal para no gastar papel)
+- ✨ Mejora en búsqueda global
 
 ### v2.0.0 (2024-12-03)
 - ✨ Sistema de tema claro/oscuro

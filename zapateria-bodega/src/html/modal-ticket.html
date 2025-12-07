@@ -1,0 +1,16 @@
+<div id="modalTicket" class="modal">
+    <div class="modal-content" style="max-width: 400px; text-align: center;">
+        <span class="close" onclick="cerrarModalTicket()">&times;</span>
+        <h2>Vista Previa del Ticket</h2>
+
+        <div id="previewContainer"
+            style="margin: 20px auto; border: 1px solid #ccc; padding: 10px; background: #fff; display: inline-block;">
+            <!-- Ticket content inject here -->
+        </div>
+
+        <div style="margin-top: 20px;">
+            <button class="btn btn-primary" onclick="imprimirDesdePreview()">🖨 Imprimir</button>
+            <button class="btn btn-secondary" onclick="cerrarModalTicket()">Cerrar</button>
+        </div>
+    </div>
+</div>

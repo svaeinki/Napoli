@@ -21,8 +21,26 @@ function showTab(tabName) {
     document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
     document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
 
-    document.getElementById(tabName).classList.add('active');
-    event.target.classList.add('active');
+    const tabContent = document.getElementById(tabName);
+    if (tabContent) {
+        tabContent.classList.add('active');
+    }
+
+    // Identificar el botón correspondiente
+    const buttons = document.querySelectorAll('.tab');
+    let targetButton = null;
+
+    // Si hay un evento y el target es un botón tab, usarlo
+    if (window.event && window.event.target && window.event.target.classList.contains('tab')) {
+        targetButton = window.event.target;
+    } else {
+        // Buscar el botón que llama a esta tab
+        targetButton = Array.from(buttons).find(btn => btn.getAttribute('onclick') === `showTab('${tabName}')`);
+    }
+
+    if (targetButton) {
+        targetButton.classList.add('active');
+    }
 
     if (tabName === 'inventario') {
         actualizarInventario();

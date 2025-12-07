@@ -131,6 +131,32 @@ async function generarTicket(articulo) {
     }
 }
 
+async function verTicket(id) {
+    try {
+        const articulo = await window.electronAPI.obtenerPorId(id);
+        if (!articulo) return;
+
+        const ticketHtml = await window.Tickets.generarHTML(articulo);
+
+        // Cargar modal si no existe en el DOM (aunque index.html debe tener el container)
+        // Usaremos templateLoader si es necesario, pero asumimos que el fetch funciona
+        const response = await fetch('html/modal-ticket.html');
+        const modalHtml = await response.text();
+
+        document.getElementById('modalTicketContainer').innerHTML = modalHtml;
+
+        // Inyectar contenido del ticket
+        document.getElementById('previewContainer').innerHTML = ticketHtml;
+
+        // Mostrar modal
+        document.getElementById('modalTicket').style.display = 'block';
+
+    } catch (error) {
+        console.error('Error mostrando ticket:', error);
+        mostrarNotificacion('❌ Error al mostrar ticket', true);
+    }
+}
+
 async function reimprimirTicket(id) {
     const articulo = await window.electronAPI.obtenerPorId(id);
     if (articulo) {
@@ -139,4 +165,13 @@ async function reimprimirTicket(id) {
             window.electronAPI.imprimir();
         }, 500); // Pequeño delay para asegurar que el DOM se actualizó
     }
+}
+
+// Funciones para el modal de ticket (movidas desde el HTML para scope global)
+function cerrarModalTicket() {
+    document.getElementById('modalTicketContainer').innerHTML = '';
+}
+
+function imprimirDesdePreview() {
+    window.electronAPI.imprimir();
 }
