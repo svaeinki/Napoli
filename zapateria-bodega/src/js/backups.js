@@ -71,13 +71,13 @@ async function verificarDropbox() {
                 console.log('✅ Conexión exitosa:', info.usuario);
                 statusElement.innerHTML = `
                     <span class="status-connected">✅ Conectado</span>
-                    <span>Usuario: ${info.usuario}</span>
+                    <span>Usuario: ${escaparHtml(info.usuario)}</span>
                 `;
                 if (configSection) configSection.style.display = 'none';
                 if (actionsElement) actionsElement.style.display = 'block';
             } else {
                 console.warn('⚠️ Error de conexión:', info.error);
-                statusElement.innerHTML = `<span class="status-disconnected">❌ ${info.error}</span>`;
+                statusElement.innerHTML = `<span class="status-disconnected">❌ ${escaparHtml(info.error)}</span>`;
                 if (configSection) configSection.style.display = 'block';
                 if (actionsElement) actionsElement.style.display = 'none';
             }
@@ -93,7 +93,7 @@ async function verificarDropbox() {
         if (error.message === 'Timeout local') {
             statusElement.innerHTML = `<span class="status-disconnected">❌ Timeout: Verifica tu conexión a internet</span>`;
         } else {
-            statusElement.innerHTML = `<span class="status-disconnected">❌ Error: ${error.message}</span>`;
+            statusElement.innerHTML = `<span class="status-disconnected">❌ Error: ${escaparHtml(error.message)}</span>`;
         }
         
         if (configSection) configSection.style.display = 'block';
@@ -141,7 +141,7 @@ async function listarBackupsDropbox() {
         } else {
             let html = '<h4>Archivos en Dropbox:</h4><ul>';
             resultado.archivos.forEach(archivo => {
-                html += `<li>${archivo.name} (${new Date(archivo.client_modified).toLocaleString('es-CL')})</li>`;
+                html += `<li>${escaparHtml(archivo.name)} (${new Date(archivo.client_modified).toLocaleString('es-CL')})</li>`;
             });
             html += '</ul>';
             lista.innerHTML = html;

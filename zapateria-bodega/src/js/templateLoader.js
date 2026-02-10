@@ -25,7 +25,10 @@ async function cargarTodosLosTemplates() {
     console.log('✅ Todos los templates cargados');
 }
 
-// Cargar templates al inicio
-document.addEventListener('DOMContentLoaded', async () => {
-    await cargarTodosLosTemplates();
+// Promesa global para que otros módulos esperen a que los templates estén listos
+window.templatesListos = new Promise((resolve) => {
+    document.addEventListener('DOMContentLoaded', async () => {
+        await cargarTodosLosTemplates();
+        resolve();
+    });
 });

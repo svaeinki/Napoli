@@ -5,6 +5,7 @@
 let articulosFiltrados = [];
 
 async function actualizarInventario() {
+    try {
     const stats = await window.electronAPI.obtenerEstadisticas();
 
     document.getElementById('totalArticulos').textContent = stats.total;
@@ -30,6 +31,10 @@ async function actualizarInventario() {
     actualizarBadgeInventario(articulosAntiguos.length);
 
     await aplicarFiltro();
+    } catch (error) {
+        console.error('Error actualizando inventario:', error);
+        mostrarNotificacion('❌ Error al cargar el inventario', true);
+    }
 }
 
 function actualizarBadgeInventario(cantidad) {
@@ -99,15 +104,15 @@ function mostrarTabla(datos, elementoId) {
         html += `
             <tr class="${claseAlerta}">
                 <td><strong>${String(art.id).padStart(4, '0')}</strong></td>
-                <td>${art.rut}</td>
-                <td>${art.nombreCliente}</td>
-                <td>${art.tipoArticulo}</td>
-                <td><small>${art.descripcion}</small></td>
-                <td><strong style="color: #667eea;">${art.numeroBodega}</strong></td>
-                <td><small>${art.fechaIngreso}</small></td>
+                <td>${escaparHtml(art.rut)}</td>
+                <td>${escaparHtml(art.nombreCliente)}</td>
+                <td>${escaparHtml(art.tipoArticulo)}</td>
+                <td><small>${escaparHtml(art.descripcion)}</small></td>
+                <td><strong style="color: #667eea;">${escaparHtml(art.numeroBodega)}</strong></td>
+                <td><small>${escaparHtml(art.fechaIngreso)}</small></td>
                 <td><strong class="${claseAlerta ? 'text-alerta' : ''}">${diasEnBodega}</strong></td>
-                <td><span class="status-badge ${art.estado === 'En Bodega' ? 'status-bodega' : 'status-entregado'}">${art.estado}</span></td>
-                <td><span class="estado-pago-badge estado-pago-${art.estadoPago.toLowerCase().replace(' ', '')}">${art.estadoPago}</span></td>
+                <td><span class="status-badge ${art.estado === 'En Bodega' ? 'status-bodega' : 'status-entregado'}">${escaparHtml(art.estado)}</span></td>
+                <td><span class="estado-pago-badge estado-pago-${art.estadoPago.toLowerCase().replace(' ', '')}">${escaparHtml(art.estadoPago)}</span></td>
                 <td><strong style="color: ${art.saldoPendiente > 0 ? '#f44336' : '#4caf50'};">$${formatearMoneda(art.saldoPendiente)}</strong></td>
                 <td class="action-buttons">
                     ${art.estado === 'En Bodega' ?
@@ -135,10 +140,16 @@ async function exportarDatos() {
         return;
     }
 
+    const escaparCsv = (texto) => {
+        if (!texto) return '';
+        const str = String(texto);
+        return str.replace(/"/g, '""').replace(/[\r\n]+/g, ' ');
+    };
+
     let csv = 'ID,RUT,Cliente,Teléfono,Tipo,Descripción,Bodega,Fecha Ingreso,Estado,Fecha Entrega,Observaciones,Valor Total,Total Abonado,Saldo Pendiente,Estado Pago\n';
 
     articulos.forEach(art => {
-        csv += `${art.id},"${art.rut}","${art.nombreCliente}","${art.telefono || ''}","${art.tipoArticulo}","${art.descripcion}","${art.numeroBodega}","${art.fechaIngreso}","${art.estado}","${art.fechaEntrega || ''}","${art.observaciones || ''}",${art.valorTotal},${art.totalAbonado},${art.saldoPendiente},"${art.estadoPago}"\n`;
+        csv += `${art.id},"${escaparCsv(art.rut)}","${escaparCsv(art.nombreCliente)}","${escaparCsv(art.telefono)}","${escaparCsv(art.tipoArticulo)}","${escaparCsv(art.descripcion)}","${escaparCsv(art.numeroBodega)}","${escaparCsv(art.fechaIngreso)}","${escaparCsv(art.estado)}","${escaparCsv(art.fechaEntrega)}","${escaparCsv(art.observaciones)}",${art.valorTotal},${art.totalAbonado},${art.saldoPendiente},"${escaparCsv(art.estadoPago)}"\n`;
     });
 
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });

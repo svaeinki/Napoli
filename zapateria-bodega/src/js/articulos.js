@@ -5,6 +5,7 @@
 async function ingresarArticulo(e) {
     e.preventDefault();
 
+    try {
     const rutInput = document.getElementById('rut').value.trim();
 
     // Validar RUT
@@ -67,6 +68,10 @@ async function ingresarArticulo(e) {
         await actualizarInventario();
     } else {
         mostrarNotificacion('❌ ' + resultado.error, true);
+    }
+    } catch (error) {
+        console.error('Error ingresando artículo:', error);
+        mostrarNotificacion('❌ Error al ingresar el artículo', true);
     }
 }
 

@@ -40,7 +40,7 @@ const Tickets = {
                     <br><br>
                     <strong>TICKET #${String(articulo.id).padStart(4, '0')}</strong>
                     <br>
-                    ${articulo.fechaIngreso}
+                    ${escaparHtml(articulo.fechaIngreso)}
                 </div>
 
                 <div class="ticket-body">
@@ -50,12 +50,12 @@ const Tickets = {
                     </div>
                      <div class="ticket-row">
                         <span class="ticket-label">RUT:</span>
-                        <span class="ticket-value">${articulo.rut}</span>
+                        <span class="ticket-value">${escaparHtml(articulo.rut)}</span>
                     </div>
                     ${articulo.telefono ? `
                     <div class="ticket-row">
                         <span class="ticket-label">Tel:</span>
-                        <span class="ticket-value">${articulo.telefono}</span>
+                        <span class="ticket-value">${escaparHtml(articulo.telefono)}</span>
                     </div>` : ''}
                     
                     <div class="ticket-divider"></div>
@@ -74,7 +74,7 @@ const Tickets = {
                     
                     <center>NÚMERO DE BODEGA</center>
                     <span class="ticket-big-text">
-                        ${articulo.numeroBodega}
+                        ${escaparHtml(articulo.numeroBodega)}
                     </span>
 
                     ${articulo.valorTotal > 0 ? `

@@ -5,14 +5,8 @@
 window.onload = async function () {
     console.log('🚀 Aplicación iniciada');
 
-    // Esperar a que los templates se carguen
-    await new Promise(resolve => {
-        if (document.getElementById('formIngresar')) {
-            resolve();
-        } else {
-            setTimeout(resolve, 500);
-        }
-    });
+    // Esperar a que los templates se carguen completamente
+    await window.templatesListos;
 
     await actualizarInventario();
     await verificarDropbox();

@@ -3,6 +3,7 @@
 // ============================================
 
 async function mostrarModalPago(id) {
+    try {
     const articulo = await window.electronAPI.obtenerPorId(id);
     if (!articulo) return;
 
@@ -31,7 +32,7 @@ async function mostrarModalPago(id) {
                 </div>
             </div>
             <div style="text-align: center; margin-top: 15px;">
-                <span class="estado-pago-badge estado-pago-${articulo.estadoPago.toLowerCase().replace(' ', '')}">${articulo.estadoPago}</span>
+                <span class="estado-pago-badge estado-pago-${articulo.estadoPago.toLowerCase().replace(' ', '')}">${escaparHtml(articulo.estadoPago)}</span>
             </div>
         </div>
     `;
@@ -51,8 +52,8 @@ async function mostrarModalPago(id) {
                         <span class="abono-monto">$${formatearMoneda(abono.monto)}</span>
                         <span class="abono-fecha">${new Date(abono.fecha).toLocaleString('es-CL')}</span>
                     </div>
-                    <div class="abono-metodo">💳 ${abono.metodoPago}</div>
-                    ${abono.observaciones ? `<div style="font-size: 12px; color: #666; margin-top: 5px;">📝 ${abono.observaciones}</div>` : ''}
+                    <div class="abono-metodo">💳 ${escaparHtml(abono.metodoPago)}</div>
+                    ${abono.observaciones ? `<div style="font-size: 12px; color: #666; margin-top: 5px;">📝 ${escaparHtml(abono.observaciones)}</div>` : ''}
                 </div>
             `;
         });
@@ -62,6 +63,10 @@ async function mostrarModalPago(id) {
     // Guardar ID en el modal para usarlo después
     modal.dataset.articuloId = id;
     modal.style.display = 'block';
+    } catch (error) {
+        console.error('Error mostrando modal de pago:', error);
+        mostrarNotificacion('❌ Error al cargar información de pagos', true);
+    }
 }
 
 async function registrarNuevoAbono() {
@@ -124,9 +129,9 @@ function cerrarModalPago() {
 }
 
 // Cerrar modal al hacer click fuera
-window.onclick = function(event) {
+window.addEventListener('click', function(event) {
     const modal = document.getElementById('modalPago');
     if (event.target === modal) {
         cerrarModalPago();
     }
-}
+});

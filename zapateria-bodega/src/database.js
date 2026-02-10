@@ -273,19 +273,15 @@ class DatabaseManager {
 
     registrarAbono(articuloId, monto, metodoPago = 'Efectivo', observaciones = '') {
         try {
-            // Insertar abono
             const insertAbono = this.db.prepare(`
                 INSERT INTO abonos (articuloId, monto, metodoPago, observaciones)
                 VALUES (?, ?, ?, ?)
             `);
 
-            insertAbono.run(articuloId, monto, metodoPago, observaciones);
-
-            // Actualizar totales del artículo
             const actualizarTotales = this.db.prepare(`
-                UPDATE articulos 
+                UPDATE articulos
                 SET totalAbonado = totalAbonado + ?,
-                    saldoPendiente = valorTotal - (totalAbonado + ?),
+                    saldoPendiente = MAX(0, valorTotal - (totalAbonado + ?)),
                     estadoPago = CASE
                         WHEN (valorTotal - (totalAbonado + ?)) <= 0 THEN 'Pagado'
                         WHEN (totalAbonado + ?) > 0 THEN 'Abonado'
@@ -295,14 +291,18 @@ class DatabaseManager {
                 WHERE id = ?
             `);
 
-            actualizarTotales.run(monto, monto, monto, monto, articuloId);
+            // Ejecutar todo dentro de una transacción
+            const registrar = this.db.transaction(() => {
+                insertAbono.run(articuloId, monto, metodoPago, observaciones);
+                actualizarTotales.run(monto, monto, monto, monto, articuloId);
+                this.statements.registrarAuditoria.run(
+                    articuloId,
+                    'REGISTRAR_ABONO',
+                    `Abono registrado: $${monto} (${metodoPago})`
+                );
+            });
 
-            // Registrar en auditoría
-            this.statements.registrarAuditoria.run(
-                articuloId,
-                'REGISTRAR_ABONO',
-                `Abono registrado: $${monto} (${metodoPago})`
-            );
+            registrar();
 
             console.log(`✅ Abono registrado: $${monto} para artículo ${articuloId}`);
             return { success: true };

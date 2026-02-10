@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, safeStorage } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const QRCode = require('qrcode');
@@ -41,6 +41,29 @@ function guardarConfiguracion(config) {
     }
 }
 
+// Cifrar token usando safeStorage de Electron
+function cifrarToken(token) {
+    if (safeStorage.isEncryptionAvailable()) {
+        return safeStorage.encryptString(token).toString('base64');
+    }
+    return token;
+}
+
+// Descifrar token
+function descifrarToken(tokenCifrado) {
+    if (!tokenCifrado) return null;
+    try {
+        if (safeStorage.isEncryptionAvailable()) {
+            const buffer = Buffer.from(tokenCifrado, 'base64');
+            return safeStorage.decryptString(buffer);
+        }
+    } catch (error) {
+        // Si falla el descifrado, asumir que es un token sin cifrar (migración)
+        console.warn('Token sin cifrar detectado, se cifrará en el próximo guardado');
+    }
+    return tokenCifrado;
+}
+
 function createWindow() {
     mainWindow = new BrowserWindow({
         width: 1400,
@@ -71,7 +94,10 @@ app.whenReady().then(() => {
     // Inicializar Dropbox si está configurado
     const config = cargarConfiguracion();
     if (config.dropboxToken) {
-        dropboxManager = new DropboxManager(config.dropboxToken);
+        const token = descifrarToken(config.dropboxToken);
+        if (token) {
+            dropboxManager = new DropboxManager(token);
+        }
     }
 
     createWindow();
@@ -88,15 +114,22 @@ app.whenReady().then(() => {
     }, 24 * 60 * 60 * 1000);
 });
 
+let backupAlCerrarRealizado = false;
+
 app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') {
-        crearBackupAutomatico();
         app.quit();
     }
 });
 
 app.on('before-quit', () => {
-    crearBackupAutomatico();
+    if (!backupAlCerrarRealizado) {
+        backupAlCerrarRealizado = true;
+        crearBackupAutomatico();
+        if (db) {
+            db.cerrar();
+        }
+    }
 });
 
 // ============================================
@@ -236,7 +269,7 @@ function exportarJSON() {
     }
 }
 
-function exportarExcel() {
+async function exportarExcel() {
     try {
         const ExcelJS = require('exceljs');
         const timestamp = new Date().toISOString().replace(/:/g, '-').split('.')[0];
@@ -319,15 +352,12 @@ function exportarExcel() {
         };
 
         // Guardar archivo
-        workbook.xlsx.writeFile(excelPath).then(() => {
-            console.log('✅ Excel exportado:', excelPath);
-        });
+        await workbook.xlsx.writeFile(excelPath);
+        console.log('✅ Excel exportado:', excelPath);
 
         // Subir a Dropbox si está configurado
         if (dropboxManager && dropboxManager.estaConfigurado()) {
-            setTimeout(() => {
-                dropboxManager.subirArchivo(excelPath, `/NapoliReparadora/Exports/${path.basename(excelPath)}`);
-            }, 1000);
+            dropboxManager.subirArchivo(excelPath, `/NapoliReparadora/Exports/${path.basename(excelPath)}`);
         }
 
         return { success: true, filename: path.basename(excelPath), path: excelPath };
@@ -390,14 +420,16 @@ ipcMain.handle('dropbox:configurar', async (event, token) => {
 
         if (verificacion.success) {
             const config = cargarConfiguracion();
-            config.dropboxToken = token;
+            config.dropboxToken = cifrarToken(token);
             guardarConfiguracion(config);
 
             return { success: true, usuario: verificacion.usuario };
         } else {
+            dropboxManager = null;
             return { success: false, error: verificacion.error };
         }
     } catch (error) {
+        dropboxManager = null;
         return { success: false, error: error.message };
     }
 });

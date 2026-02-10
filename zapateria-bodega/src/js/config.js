@@ -1,5 +1,5 @@
 async function abrirConfiguracion() {
-    const modal = document.getElementById('modalContainer');
+    const modal = document.getElementById('modalConfigContainer');
     // Cargar el HTML del modal si no está cargado, o mostrarlo
     if (!document.getElementById('modal-config')) {
         try {
