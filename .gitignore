@@ -7,7 +7,8 @@ package-lock.json
 
 # Archivos de build y distribución
 dist/
-build/
+build/*
+!build/icon.*
 out/
 *.app
 *.dmg
