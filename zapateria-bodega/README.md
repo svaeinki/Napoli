@@ -60,21 +60,62 @@ Sistema profesional de gestión de bodega para reparadora de calzado con base de
 
 Sigue las instrucciones específicas para tu sistema operativo para evitar problemas comunes de compilación.
 
-### Requisitos Previos Generales
-- **Node.js**: Versión 16 o superior.
-- **Git**: Para clonar el repositorio.
+### Requisitos del Sistema
+
+| Requisito | Versión mínima | Versión recomendada |
+|-----------|---------------|---------------------|
+| Node.js   | **18.x LTS**  | 20.x o 22.x LTS     |
+| npm       | 8.x           | incluido con Node    |
+| Git       | cualquier     | —                   |
+
+> **Nota:** Node.js 16 ya no es compatible. Usa Node.js 18 o superior.
+
+#### Verificar instalación
+
+```bash
+node --version   # debe ser v18.x o superior
+npm --version    # debe ser v8.x o superior
+```
 
 ---
 
-###  Para Mac (macOS)
+### Dependencias nativas por plataforma
 
-#### 1. Requisitos Previos
-Asegúrate de tener instaladas las herramientas de línea de comandos de Xcode:
+La app incluye `better-sqlite3`, un módulo nativo que requiere compilación C++. Instala las herramientas correspondientes a tu sistema **antes** de ejecutar `npm install`.
+
+#### macOS
 ```bash
 xcode-select --install
 ```
 
-#### 2. Instalación Paso a Paso
+#### Windows
+Instala **Visual Studio Build Tools 2022** desde Microsoft:
+1. Descarga desde: https://visualstudio.microsoft.com/visual-cpp-build-tools/
+2. En el instalador, selecciona el workload **"Desarrollo de escritorio con C++"**
+3. Reinicia PowerShell o CMD después de instalar
+
+> El comando `npm install --global windows-build-tools` está **deprecado** desde 2019 y no debe usarse.
+
+#### Linux (Ubuntu/Debian)
+```bash
+sudo apt-get install python3 make g++ libsqlite3-dev
+```
+
+#### Linux (Fedora/RHEL)
+```bash
+sudo dnf install python3 gcc-c++ make sqlite-devel
+```
+
+#### Linux (Arch)
+```bash
+sudo pacman -S base-devel sqlite
+```
+
+---
+
+### 🍎 Para Mac (macOS)
+
+#### Instalación Paso a Paso
 Abre tu terminal y ejecuta:
 
 ```bash
@@ -96,15 +137,7 @@ npm start
 
 ### 🪟 Para Windows
 
-#### 1. Requisitos Previos
-- **PowerShell** (Recomendado) o CMD.
-- **Herramientas de compilación de Windows**: Si tienes errores al instalar, es posible que necesites instalar las herramientas de compilación de Visual Studio. Puedes instalarlas ejecutando este comando en PowerShell como **Administrador**:
-  ```powershell
-  npm install --global --production windows-build-tools
-  ```
-  *(Nota: Esto puede tardar varios minutos)*
-
-#### 2. Instalación Paso a Paso
+#### Instalación Paso a Paso
 
 ```powershell
 # 1. Clonar el repositorio
@@ -115,12 +148,60 @@ cd Napoli/zapateria-bodega
 npm install
 
 # 3. Compilar módulos nativos
-# Si este paso falla, asegúrate de tener los requisitos previos arriba mencionados.
+# Si este paso falla, verifica que Visual Studio Build Tools esté instalado.
 npm run rebuild
 
 # 4. Iniciar la aplicación
 npm start
 ```
+
+---
+
+### Configuración Opcional — Dropbox
+
+La integración con Dropbox es **completamente opcional** y se configura desde dentro de la aplicación:
+
+1. Abre la app y ve al panel de configuración (icono de engranaje).
+2. Ingresa tu token de acceso a Dropbox.
+3. La app guarda el token **encriptado** en el directorio de datos del usuario.
+
+No requiere variables de entorno ni archivos `.env`.
+
+---
+
+### Base de Datos
+
+La base de datos SQLite se crea **automáticamente** al primer arranque de la aplicación.
+
+**Ubicación del archivo:**
+- **macOS:** `~/Library/Application Support/Napoli Reparadora/napoli.db`
+- **Windows:** `%APPDATA%\Napoli Reparadora\napoli.db`
+
+Para resetear la base de datos: cierra la app y elimina el archivo `.db`. Se recreará vacía en el próximo arranque.
+
+---
+
+## 🔧 Troubleshooting
+
+### Error `better-sqlite3` al instalar o al arrancar
+```
+Error: The module '.../better_sqlite3.node' was compiled against a different Node.js version
+```
+**Solución:** Ejecuta `npm run rebuild` para recompilar el módulo nativo para la versión de Electron instalada.
+
+### Advertencia de seguridad en macOS al abrir el instalador
+macOS muestra una advertencia porque la app no está firmada con un certificado de Apple Developer Program. Para abrirla de todos modos:
+1. Intenta abrir el .dmg normalmente — aparece el error.
+2. Ve a **Ajustes del Sistema → Privacidad y Seguridad** y busca la opción para abrir la app igualmente.
+
+### Windows SmartScreen bloquea el instalador .exe
+SmartScreen advierte sobre apps sin firma de código. Haz clic en **"Más información" → "Ejecutar de todos modos"**. Este comportamiento es normal para distribución sin firma digital.
+
+### Error `node-gyp` en Windows
+```
+gyp ERR! build error
+```
+**Solución:** Verifica que **Visual Studio Build Tools 2022** esté instalado correctamente con el workload "Desarrollo de escritorio con C++". Consulta la sección [Dependencias nativas por plataforma](#dependencias-nativas-por-plataforma) más arriba.
 
 ---
 
@@ -187,5 +268,5 @@ MIT License - Libre para usar y modificar
 
 ---
 
-**Napoli - Reparadora de Calzado**  
+**Napoli - Reparadora de Calzado**
 **Hecho con ❤️ en Chile 🇨🇱**
