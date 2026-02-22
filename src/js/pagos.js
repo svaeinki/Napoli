@@ -55,7 +55,7 @@ async function mostrarModalPago(id) {
     }
     
     if (abonos.length === 0) {
-        abonosList.innerHTML = '<p style="text-align: center; color: #999; padding: 20px;">No hay abonos registrados</p>';
+        abonosList.innerHTML = '<p style="text-align: center; color: var(--text-muted); padding: 20px;">No hay abonos registrados</p>';
     } else {
         let html = '';
         abonos.forEach(abono => {
@@ -66,7 +66,7 @@ async function mostrarModalPago(id) {
                         <span class="abono-fecha">${new Date(abono.fecha).toLocaleString('es-CL')}</span>
                     </div>
                     <div class="abono-metodo">💳 ${escaparHtml(abono.metodoPago)}</div>
-                    ${abono.observaciones ? `<div style="font-size: 12px; color: #666; margin-top: 5px;">📝 ${escaparHtml(abono.observaciones)}</div>` : ''}
+                    ${abono.observaciones ? `<div style="font-size: 12px; color: var(--text-muted); margin-top: 5px;">📝 ${escaparHtml(abono.observaciones)}</div>` : ''}
                 </div>
             `;
         });

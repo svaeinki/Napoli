@@ -88,7 +88,7 @@ function mostrarTabla(datos, elementoId) {
     }
 
     if (datos.length === 0) {
-        elemento.innerHTML = '<p style="text-align: center; padding: 40px; color: #999;">No hay artículos para mostrar.</p>';
+        elemento.innerHTML = '<p style="text-align: center; padding: 40px; color: var(--text-muted);">No hay artículos para mostrar.</p>';
         return;
     }
 
@@ -131,12 +131,12 @@ function mostrarTabla(datos, elementoId) {
                 <td>${escaparHtml(art.nombreCliente)}</td>
                 <td>${escaparHtml(art.tipoArticulo)}</td>
                 <td><small>${escaparHtml(art.descripcion)}</small></td>
-                <td><strong style="color: #667eea;">${escaparHtml(numeroBodega)}</strong></td>
+                <td><strong style="color: var(--location-highlight);">${escaparHtml(numeroBodega)}</strong></td>
                 <td><small>${escaparHtml(art.fechaIngreso)}</small></td>
                 <td><strong class="${claseAlerta ? 'text-alerta' : ''}">${diasEnBodega}</strong></td>
                 <td><span class="status-badge ${art.estado === 'En Bodega' ? 'status-bodega' : 'status-entregado'}">${escaparHtml(art.estado)}</span></td>
                 <td><span class="estado-pago-badge estado-pago-${estadoPagoClase}">${escaparHtml(estadoPago)}</span></td>
-                <td><strong style="color: ${art.saldoPendiente > 0 ? '#f44336' : '#4caf50'};">$${formatearMoneda(art.saldoPendiente)}</strong></td>
+                <td><strong style="color: ${art.saldoPendiente > 0 ? 'var(--saldo-negative)' : 'var(--saldo-positive)'};">$${formatearMoneda(art.saldoPendiente)}</strong></td>
                 <td class="action-buttons">
                     ${art.estado === 'En Bodega' ?
                 `<button class="btn btn-success btn-small" onclick="marcarEntregado(${art.id})">✓ Entregar</button>` :

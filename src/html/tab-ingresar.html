@@ -5,7 +5,7 @@
             <label>RUT Cliente *</label>
             <input type="text" id="rut" placeholder="Ej: 12345678-9" required 
                    oninput="validarRUTEnTiempoReal(this)">
-            <small id="rutError" style="color: #dc3545; display: none; margin-top: 5px;">RUT inválido</small>
+            <small id="rutError" style="color: var(--state-error-text); display: none; margin-top: 5px;">RUT inválido</small>
         </div>
 
         <div class="form-group">
@@ -50,13 +50,13 @@
         <div class="form-group">
             <label>Valor del Servicio 💰</label>
             <input type="text" id="valorTotal" placeholder="Ej: 15000" oninput="formatearNumeroInput(this)">
-            <small style="color: #666;">Dejar vacío o en 0 si no aplica</small>
+            <small style="color: var(--text-muted);">Dejar vacío o en 0 si no aplica</small>
         </div>
 
         <div class="form-group">
             <label>Abono Inicial 💵</label>
             <input type="text" id="abonoInicial" placeholder="Ej: 5000" oninput="formatearNumeroInput(this)">
-            <small style="color: #666;">Opcional - Se registrará al guardar</small>
+            <small style="color: var(--text-muted);">Opcional - Se registrará al guardar</small>
         </div>
 
         <div class="form-group">
