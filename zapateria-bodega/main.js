@@ -64,6 +64,14 @@ function descifrarToken(tokenCifrado) {
     return tokenCifrado;
 }
 
+function sanitizarConfigImpresora(printerConfig = {}) {
+    const widthsPermitidos = new Set(['58mm', '80mm']);
+    const width = widthsPermitidos.has(printerConfig.width) ? printerConfig.width : '58mm';
+    const header = typeof printerConfig.header === 'string' ? printerConfig.header.slice(0, 500) : '';
+    const footer = typeof printerConfig.footer === 'string' ? printerConfig.footer.slice(0, 500) : '';
+    return { width, header, footer };
+}
+
 function createWindow() {
     mainWindow = new BrowserWindow({
         width: 1400,
@@ -110,11 +118,14 @@ app.whenReady().then(() => {
 
     // Backup automático cada 24 horas
     setInterval(() => {
-        crearBackupAutomatico();
+        crearBackupAutomatico().catch((error) => {
+            console.error('Error en backup automático programado:', error);
+        });
     }, 24 * 60 * 60 * 1000);
 });
 
 let backupAlCerrarRealizado = false;
+let cierreForzadoTrasBackup = false;
 
 app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') {
@@ -122,13 +133,27 @@ app.on('window-all-closed', () => {
     }
 });
 
-app.on('before-quit', () => {
+app.on('before-quit', (event) => {
+    if (cierreForzadoTrasBackup) {
+        return;
+    }
+
     if (!backupAlCerrarRealizado) {
+        event.preventDefault();
         backupAlCerrarRealizado = true;
-        crearBackupAutomatico();
-        if (db) {
-            db.cerrar();
-        }
+
+        crearBackupAutomatico()
+            .catch((error) => {
+                console.error('Error creando backup al cerrar:', error);
+            })
+            .finally(() => {
+                if (db) {
+                    db.cerrar();
+                    db = null;
+                }
+                cierreForzadoTrasBackup = true;
+                app.quit();
+            });
     }
 });
 
@@ -204,17 +229,28 @@ ipcMain.handle('backup:abrirCarpeta', async () => {
     shell.openPath(BACKUPS_PATH);
 });
 
-function crearBackupAutomatico() {
+async function crearBackupAutomatico() {
     try {
         const timestamp = new Date().toISOString().replace(/:/g, '-').split('.')[0];
         const backupPath = path.join(BACKUPS_PATH, `napoli_backup_${timestamp}.db`);
 
-        fs.copyFileSync(DB_PATH, backupPath);
+        if (!db) {
+            throw new Error('Base de datos no inicializada');
+        }
+
+        const backupDB = await db.crearBackup(backupPath);
+        if (!backupDB.success) {
+            return backupDB;
+        }
+
         console.log('✅ Backup automático creado:', backupPath);
 
         // Subir a Dropbox si está configurado
         if (dropboxManager && dropboxManager.estaConfigurado()) {
-            dropboxManager.subirBackupDB(backupPath);
+            const subida = await dropboxManager.subirBackupDB(backupPath);
+            if (!subida.success) {
+                console.warn('⚠️ Backup automático local creado, pero falló subida a Dropbox:', subida.error);
+            }
         }
 
         // Limpiar backups antiguos (mantener últimos 30 días)
@@ -227,17 +263,34 @@ function crearBackupAutomatico() {
     }
 }
 
-function crearBackupManual() {
+async function crearBackupManual(options = {}) {
+    const { exigirDropbox = false } = options;
+
     try {
         const timestamp = new Date().toISOString().replace(/:/g, '-').split('.')[0];
         const backupPath = path.join(BACKUPS_PATH, `napoli_manual_${timestamp}.db`);
 
-        fs.copyFileSync(DB_PATH, backupPath);
+        if (!db) {
+            throw new Error('Base de datos no inicializada');
+        }
+
+        const backupDB = await db.crearBackup(backupPath);
+        if (!backupDB.success) {
+            return backupDB;
+        }
+
         console.log('✅ Backup manual creado:', backupPath);
 
         // Subir a Dropbox si está configurado
         if (dropboxManager && dropboxManager.estaConfigurado()) {
-            dropboxManager.subirBackupDB(backupPath);
+            const subida = await dropboxManager.subirBackupDB(backupPath);
+            if (!subida.success) {
+                const mensaje = `Backup local creado, pero falló subida a Dropbox: ${subida.error}`;
+                if (exigirDropbox) {
+                    return { success: false, error: mensaje };
+                }
+                return { success: true, path: backupPath, warning: mensaje };
+            }
         }
 
         return { success: true, path: backupPath };
@@ -259,7 +312,9 @@ function exportarJSON() {
 
         // Subir a Dropbox si está configurado
         if (dropboxManager && dropboxManager.estaConfigurado()) {
-            dropboxManager.subirBackupJSON(jsonPath);
+            dropboxManager.subirBackupJSON(jsonPath).catch((error) => {
+                console.warn('⚠️ JSON exportado localmente, pero falló subida a Dropbox:', error.message);
+            });
         }
 
         return { success: true, filename: path.basename(jsonPath) };
@@ -357,7 +412,15 @@ async function exportarExcel() {
 
         // Subir a Dropbox si está configurado
         if (dropboxManager && dropboxManager.estaConfigurado()) {
-            dropboxManager.subirArchivo(excelPath, `/NapoliReparadora/Exports/${path.basename(excelPath)}`);
+            const subida = await dropboxManager.subirArchivo(excelPath, `/NapoliReparadora/Exports/${path.basename(excelPath)}`);
+            if (!subida.success) {
+                return {
+                    success: true,
+                    filename: path.basename(excelPath),
+                    path: excelPath,
+                    warning: `Excel exportado localmente, pero falló subida a Dropbox: ${subida.error}`
+                };
+            }
         }
 
         return { success: true, filename: path.basename(excelPath), path: excelPath };
@@ -367,14 +430,14 @@ async function exportarExcel() {
     }
 }
 
-function subirBackupDropboxInmediato() {
+async function subirBackupDropboxInmediato() {
     try {
         if (!dropboxManager || !dropboxManager.estaConfigurado()) {
             return { success: false, error: 'Dropbox no configurado' };
         }
 
         // Crear backup local primero
-        const backupResult = crearBackupManual();
+        const backupResult = await crearBackupManual({ exigirDropbox: true });
 
         if (!backupResult.success) {
             return backupResult;
@@ -461,7 +524,7 @@ ipcMain.handle('dropbox:listarBackups', async () => {
 });
 
 ipcMain.handle('dropbox:subirBackupAhora', async () => {
-    return subirBackupDropboxInmediato();
+    return await subirBackupDropboxInmediato();
 });
 
 // ============================================
@@ -469,14 +532,23 @@ ipcMain.handle('dropbox:subirBackupAhora', async () => {
 // ============================================
 
 ipcMain.handle('config:obtener', async () => {
-    return cargarConfiguracion();
+    const config = cargarConfiguracion();
+    return {
+        printer: config.printer || {}
+    };
 });
 
 ipcMain.handle('config:guardar', async (event, nuevaConfig) => {
     try {
         const config = cargarConfiguracion();
-        const configActualizada = { ...config, ...nuevaConfig };
-        guardarConfiguracion(configActualizada);
+
+        if (nuevaConfig && typeof nuevaConfig === 'object' && nuevaConfig.printer) {
+            const printerActual = config.printer || {};
+            const printerSanitizado = sanitizarConfigImpresora(nuevaConfig.printer);
+            config.printer = { ...printerActual, ...printerSanitizado };
+        }
+
+        guardarConfiguracion(config);
         return { success: true };
     } catch (error) {
         console.error('Error guardando configuración:', error);

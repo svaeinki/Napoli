@@ -5,7 +5,11 @@
 async function crearBackupManual() {
     const resultado = await window.electronAPI.crearBackup();
     if (resultado.success) {
-        mostrarNotificacion('✅ Backup creado correctamente');
+        if (resultado.warning) {
+            mostrarNotificacion(`⚠️ ${resultado.warning}`, true);
+        } else {
+            mostrarNotificacion('✅ Backup creado correctamente');
+        }
     } else {
         mostrarNotificacion('❌ Error al crear backup: ' + resultado.error, true);
     }
@@ -26,7 +30,11 @@ async function exportarExcel() {
     const resultado = await window.electronAPI.exportarExcel();
     
     if (resultado.success) {
-        mostrarNotificacion(`✅ Excel exportado: ${resultado.filename}`);
+        if (resultado.warning) {
+            mostrarNotificacion(`⚠️ ${resultado.warning}`, true);
+        } else {
+            mostrarNotificacion(`✅ Excel exportado: ${resultado.filename}`);
+        }
     } else {
         mostrarNotificacion('❌ Error al exportar Excel: ' + resultado.error, true);
     }

@@ -30,8 +30,8 @@ const Tickets = {
         }
 
         // Formatear textos
-        const headerHtml = this.config.header.replace(/\n/g, '<br>');
-        const footerHtml = this.config.footer.replace(/\n/g, '<br>');
+        const headerHtml = escaparHtml(String(this.config.header || '')).replace(/\n/g, '<br>');
+        const footerHtml = escaparHtml(String(this.config.footer || '')).replace(/\n/g, '<br>');
 
         return `
             <div class="ticket-content ${widthClass}">

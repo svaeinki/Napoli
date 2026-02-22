@@ -243,6 +243,9 @@ class DatabaseManager {
     eliminar(id) {
         try {
             const articulo = this.statements.obtenerPorId.get(id);
+            if (!articulo) {
+                return { success: false, error: 'Artículo no encontrado' };
+            }
 
             this.statements.registrarAuditoria.run(
                 id,
@@ -332,7 +335,7 @@ class DatabaseManager {
             const actualizar = this.db.prepare(`
                 UPDATE articulos 
                 SET valorTotal = ?,
-                    saldoPendiente = ? - totalAbonado,
+                    saldoPendiente = MAX(0, ? - totalAbonado),
                     estadoPago = CASE
                         WHEN (? - totalAbonado) <= 0 THEN 'Pagado'
                         WHEN totalAbonado > 0 THEN 'Abonado'
@@ -353,6 +356,16 @@ class DatabaseManager {
             return { success: true };
         } catch (error) {
             console.error('Error al actualizar valor:', error);
+            return { success: false, error: error.message };
+        }
+    }
+
+    async crearBackup(rutaDestino) {
+        try {
+            await this.db.backup(rutaDestino);
+            return { success: true, path: rutaDestino };
+        } catch (error) {
+            console.error('Error creando backup SQLite:', error);
             return { success: false, error: error.message };
         }
     }
