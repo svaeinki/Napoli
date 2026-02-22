@@ -25,6 +25,7 @@ async function abrirConfiguracion() {
     const config = await window.electronAPI.obtenerConfiguracion();
     const defaults = (window.Tickets && window.Tickets.config) ? window.Tickets.config : {
         width: '58mm',
+        fontProfile58: 'legible',
         header: 'NAPOLI\nReparadora de Calzado',
         footer: 'Gracias por preferir Napoli\nConserve este ticket'
     };
@@ -36,8 +37,13 @@ async function abrirConfiguracion() {
         ? printerConfig.footer
         : defaults.footer;
     const width = printerConfig.width === '80mm' ? '80mm' : defaults.width;
+    const perfilesPermitidos = new Set(['compacto', 'legible', 'extra_grande']);
+    const fontProfile58 = perfilesPermitidos.has(printerConfig.fontProfile58)
+        ? printerConfig.fontProfile58
+        : (defaults.fontProfile58 || 'legible');
 
     document.getElementById('configPrinterWidth').value = width;
+    document.getElementById('configTicketFontProfile58').value = fontProfile58;
     document.getElementById('configTicketHeader').value = header;
     document.getElementById('configTicketFooter').value = footer;
 
@@ -69,11 +75,13 @@ function cerrarConfiguracion() {
 async function guardarConfiguracionImpresora() {
     try {
         const width = document.getElementById('configPrinterWidth').value;
+        const fontProfile58 = document.getElementById('configTicketFontProfile58').value;
         const header = document.getElementById('configTicketHeader').value;
         const footer = document.getElementById('configTicketFooter').value;
 
         const nuevaConfig = {
             width,
+            fontProfile58,
             header,
             footer
         };

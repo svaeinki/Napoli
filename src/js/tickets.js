@@ -1,5 +1,6 @@
 const CONFIG_IMPRESION_DEFAULT = {
     width: '58mm', // '58mm' o '80mm'
+    fontProfile58: 'legible', // compacto | legible | extra_grande
     header: 'NAPOLI\nReparadora de Calzado',
     footer: 'Gracias por preferir Napoli\nConserve este ticket'
 };
@@ -7,6 +8,12 @@ const CONFIG_IMPRESION_DEFAULT = {
 function textoConDefault(texto, fallback) {
     if (typeof texto !== 'string') return fallback;
     return texto.trim() ? texto : fallback;
+}
+
+function perfil58ConDefault(perfil, fallback = CONFIG_IMPRESION_DEFAULT.fontProfile58) {
+    const permitidos = new Set(['compacto', 'legible', 'extra_grande']);
+    const valor = typeof perfil === 'string' ? perfil.trim().toLowerCase() : '';
+    return permitidos.has(valor) ? valor : fallback;
 }
 
 const Tickets = {
@@ -20,6 +27,7 @@ const Tickets = {
             const printer = savedConfig.printer;
             this.config = {
                 width: printer.width === '80mm' ? '80mm' : CONFIG_IMPRESION_DEFAULT.width,
+                fontProfile58: perfil58ConDefault(printer.fontProfile58),
                 header: textoConDefault(printer.header, CONFIG_IMPRESION_DEFAULT.header),
                 footer: textoConDefault(printer.footer, CONFIG_IMPRESION_DEFAULT.footer)
             };
@@ -31,15 +39,13 @@ const Tickets = {
         await this.init();
 
         const widthClass = this.config.width === '80mm' ? 'width-80mm' : 'width-58mm';
-
-        // Generar QR
-        let qrImg = '';
-        try {
-            // El ID del artículo será el contenido del QR
-            qrImg = await window.electronAPI.generarQR(String(articulo.id));
-        } catch (e) {
-            console.error('Error generando QR:', e);
-        }
+        const fontProfile58 = perfil58ConDefault(this.config.fontProfile58);
+        const fontProfileClass = widthClass === 'width-58mm'
+            ? `font58-${fontProfile58}`
+            : '';
+        const ticketClassName = fontProfileClass
+            ? `ticket-content ${widthClass} ${fontProfileClass}`
+            : `ticket-content ${widthClass}`;
 
         // Formatear textos
         const headerHtml = escaparHtml(String(this.config.header || '')).replace(/\n/g, '<br>');
@@ -47,46 +53,44 @@ const Tickets = {
         const numeroBodega = typeof articulo.numeroBodega === 'string' ? articulo.numeroBodega.trim() : '';
 
         return `
-            <div class="ticket-content ${widthClass}">
+            <div class="${ticketClassName}">
                 <div class="ticket-header">
                     ${headerHtml}
-                    <br><br>
-                    <strong>TICKET #${String(articulo.id).padStart(4, '0')}</strong>
-                    <br>
-                    ${escaparHtml(articulo.fechaIngreso)}
+                    <div class="ticket-meta ticket-code">TICKET #${String(articulo.id).padStart(4, '0')}</div>
+                    <div class="ticket-meta">${escaparHtml(articulo.fechaIngreso)}</div>
                 </div>
 
                 <div class="ticket-body">
-                    <div class="ticket-row">
+                    <div class="ticket-row ticket-row-stacked">
                         <span class="ticket-label">Cliente:</span>
                         <span class="ticket-value">${escaparHtml(articulo.nombreCliente)}</span>
                     </div>
-                     <div class="ticket-row">
+                    <div class="ticket-row ticket-row-stacked">
                         <span class="ticket-label">RUT:</span>
                         <span class="ticket-value">${escaparHtml(articulo.rut)}</span>
                     </div>
                     ${articulo.telefono ? `
-                    <div class="ticket-row">
+                    <div class="ticket-row ticket-row-stacked">
                         <span class="ticket-label">Tel:</span>
                         <span class="ticket-value">${escaparHtml(articulo.telefono)}</span>
                     </div>` : ''}
                     
                     <div class="ticket-divider"></div>
 
-                    <div class="ticket-row">
+                    <div class="ticket-row ticket-row-stacked">
                         <span class="ticket-label">Servicio:</span>
                         <span class="ticket-value">${escaparHtml(articulo.tipoArticulo)}</span>
                     </div>
                     
-                    <div style="margin: 5px 0;">
-                        <span class="ticket-label">Detalle:</span><br>
-                        <span style="font-size: 11px;">${escaparHtml(articulo.descripcion)}</span>
+                    <div class="ticket-detail-block">
+                        <span class="ticket-label">Detalle:</span>
+                        <span class="ticket-detail-text">${escaparHtml(articulo.descripcion)}</span>
                     </div>
 
                     ${numeroBodega ? `
                     <div class="ticket-divider"></div>
                     
-                    <center>UBICACIÓN</center>
+                    <div class="ticket-section-title">UBICACIÓN</div>
                     <span class="ticket-big-text">
                         ${escaparHtml(numeroBodega)}
                     </span>
@@ -109,12 +113,6 @@ const Tickets = {
                         </div>
                     ` : ''}
                 </div>
-
-                ${qrImg ? `
-                <div class="ticket-qr">
-                    <img src="${qrImg}" width="100" />
-                </div>
-                ` : ''}
 
                 <div class="ticket-footer">
                     ${footerHtml}

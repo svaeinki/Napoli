@@ -39,16 +39,18 @@
 }
 
 .ticket-content {
-    font-family: 'Courier New', Courier, monospace; /* Fuente monoespaciada para tickets */
-    font-size: 12px;
-    line-height: 1.2;
+    font-family: 'Consolas', 'Courier New', Courier, monospace; /* Fuente clara para térmica */
+    font-size: 12.5px;
+    line-height: 1.3;
+    font-weight: 500;
+    letter-spacing: 0.1px;
     color: black;
     background: white;
 }
 
 /* Ancho configurable */
 .width-58mm {
-    width: 48mm; /* Margen de seguridad */
+    width: 52mm; /* Aprovechar mejor el ancho útil de 58mm */
     max-width: 58mm;
 }
 
@@ -61,8 +63,8 @@
 .ticket-header {
     text-align: center;
     border-bottom: 2px dashed black;
-    padding-bottom: 10px;
-    margin-bottom: 10px;
+    padding-bottom: 8px;
+    margin-bottom: 8px;
 }
 
 .ticket-header h2 {
@@ -77,34 +79,61 @@
 }
 
 .ticket-body {
-    margin-bottom: 15px;
+    margin-bottom: 10px;
+}
+
+.ticket-meta {
+    margin-top: 4px;
+    font-size: 12px;
+}
+
+.ticket-code {
+    font-size: 14px;
+    font-weight: 700;
 }
 
 .ticket-row {
     display: flex;
     justify-content: space-between;
-    margin-bottom: 4px;
+    margin-bottom: 6px;
 }
 
 .ticket-label {
-    font-weight: bold;
+    font-weight: 700;
     margin-right: 5px;
 }
 
 .ticket-value {
     text-align: right;
     flex: 1;
-    word-break: break-all;
+    word-break: break-word;
 }
 
 .ticket-divider {
     border-top: 1px dashed black;
-    margin: 8px 0;
+    margin: 7px 0;
+}
+
+.ticket-detail-block {
+    margin: 6px 0;
+}
+
+.ticket-detail-text {
+    display: block;
+    margin-top: 2px;
+    font-size: 12px;
+    line-height: 1.35;
+}
+
+.ticket-section-title {
+    text-align: center;
+    font-weight: 700;
+    margin: 4px 0;
 }
 
 .ticket-big-text {
-    font-size: 16px;
-    font-weight: bold;
+    font-size: 17px;
+    font-weight: 700;
     display: block;
     text-align: center;
     padding: 5px;
@@ -122,24 +151,113 @@
 .ticket-total-row {
     display: flex;
     justify-content: space-between;
-    font-size: 14px;
+    font-size: 15px;
     margin-top: 4px;
 }
 
 .ticket-footer {
     text-align: center;
     border-top: 2px dashed black;
-    padding-top: 10px;
-    margin-top: 10px;
+    padding-top: 8px;
+    margin-top: 8px;
+    font-size: 12px;
+    line-height: 1.35;
 }
 
-.ticket-qr {
-    text-align: center;
-    margin: 15px 0;
-}
-
-.ticket-qr img {
-    margin: 0 auto;
+/* Reglas base de layout para 58mm */
+.width-58mm .ticket-row-stacked {
     display: block;
-    max-width: 100%;
+    margin-bottom: 7px;
+}
+
+.width-58mm .ticket-row-stacked .ticket-label {
+    display: block;
+    margin-right: 0;
+    margin-bottom: 1px;
+}
+
+.width-58mm .ticket-row-stacked .ticket-value {
+    display: block;
+    text-align: left;
+}
+
+/* Perfil compacto: prioriza más contenido por ticket */
+.width-58mm.font58-compacto {
+    font-size: 12px;
+    line-height: 1.25;
+    font-weight: 500;
+}
+
+.width-58mm.font58-compacto .ticket-meta {
+    font-size: 11.5px;
+}
+
+.width-58mm.font58-compacto .ticket-code {
+    font-size: 14px;
+}
+
+.width-58mm.font58-compacto .ticket-detail-text {
+    font-size: 11.5px;
+}
+
+.width-58mm.font58-compacto .ticket-big-text {
+    font-size: 17px;
+}
+
+.width-58mm.font58-compacto .ticket-total-row {
+    font-size: 14.5px;
+}
+
+/* Perfil legible: recomendado para uso diario */
+.width-58mm.font58-legible {
+    font-size: 13px;
+    line-height: 1.35;
+    font-weight: 600;
+}
+
+.width-58mm.font58-legible .ticket-meta {
+    font-size: 12px;
+}
+
+.width-58mm.font58-legible .ticket-code {
+    font-size: 15px;
+}
+
+.width-58mm.font58-legible .ticket-detail-text {
+    font-size: 12.5px;
+}
+
+.width-58mm.font58-legible .ticket-big-text {
+    font-size: 19px;
+}
+
+.width-58mm.font58-legible .ticket-total-row {
+    font-size: 16px;
+}
+
+/* Perfil extra grande: máxima legibilidad */
+.width-58mm.font58-extra_grande {
+    font-size: 14px;
+    line-height: 1.45;
+    font-weight: 600;
+}
+
+.width-58mm.font58-extra_grande .ticket-meta {
+    font-size: 13px;
+}
+
+.width-58mm.font58-extra_grande .ticket-code {
+    font-size: 16px;
+}
+
+.width-58mm.font58-extra_grande .ticket-detail-text {
+    font-size: 13.5px;
+}
+
+.width-58mm.font58-extra_grande .ticket-big-text {
+    font-size: 21px;
+}
+
+.width-58mm.font58-extra_grande .ticket-total-row {
+    font-size: 17px;
 }

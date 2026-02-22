@@ -5,6 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Project Overview
 
 Electron desktop application for **Napoli Reparadora de Calzado** — a Chilean shoe repair warehouse management system. The UI and variable names are in Spanish throughout.
+Current release target documented in this repo: **2.0.2**.
 
 ## Commands
 
@@ -14,14 +15,17 @@ npm run build       # Build for macOS and Windows
 npm run build-mac   # Build macOS DMG only
 npm run build-win   # Build Windows NSIS installer only
 npm run rebuild     # Rebuild native modules (better-sqlite3) after Electron version changes
+npm run check:syntax
+npm run check:audit
+npm run release:check
 ```
 
-There are no test or lint commands configured. `postinstall` runs `electron-rebuild` automatically.
+There is no automated UI/unit test suite configured. `postinstall` runs `electron-rebuild` automatically, and release validation is done via `release:check`.
 
 ## Architecture
 
 **Electron with context isolation** — the app uses a strict security model:
-- `main.js` (root): Electron main process — window creation, 25 IPC handlers, DB init, auto-backup scheduling
+- `main.js` (root): Electron main process — window creation, IPC handlers, DB init, auto-backup scheduling
 - `src/preload.js`: Context bridge — the only communication channel between renderer and main process
 - `src/database.js`: All SQLite operations via `DatabaseManager` class — never called from renderer directly
 - `src/dropbox.js`: Dropbox SDK wrapper for optional cloud backup sync
@@ -46,7 +50,7 @@ There are no test or lint commands configured. `postinstall` runs `electron-rebu
 - WAL journal mode, foreign keys enabled
 - Prepared statements cached in `this.statements` on init for performance
 - Main tables: `articulos` (repair tickets), `abonos` (payment installments), `auditoria` (action log)
-- `numeroBodega` is the unique warehouse slot number (uppercased on insert)
+- `numeroBodega` is optional; when empty it is normalized to `null` (uppercase when provided)
 - Payment columns (`valorTotal`, `totalAbonado`, `saldoPendiente`, `estadoPago`) are added via migration if missing
 - Abono registration uses `db.transaction()` to atomically insert the abono + update article totals
 
@@ -54,16 +58,16 @@ There are no test or lint commands configured. `postinstall` runs `electron-rebu
 
 **Date format:** Chilean format `dd/mm/yyyy, hh:mm:ss` — parsed throughout the frontend by splitting on `,` then `/`. Currency uses `Intl.NumberFormat('es-CL')`.
 
-**Configuration:** stored at `app.getPath('userData')/config.json` — includes printer settings (58mm/80mm width, header/footer text). Printer config is sanitized via `sanitizarConfigImpresora()` in main.js (width whitelist, 500-char limit on header/footer).
+**Configuration:** stored at `app.getPath('userData')/config.json` — includes printer settings (`width`, `header`, `footer`, `fontProfile58`). Printer config is sanitized via `sanitizarConfigImpresora()` in main.js (width/profile whitelist, 500-char limit on header/footer).
 
 **Dropbox tokens** are encrypted with Electron's `safeStorage` before persisting to config
 
-**Barcode/QR scanner detection** in `src/js/main.js` uses keystroke timing (50ms threshold) to distinguish scanner input from manual typing
+**Barcode scanner detection** in `src/js/main.js` uses keystroke timing (50ms threshold) to distinguish scanner input from manual typing
 
 **Chilean RUT validation** is in `src/js/validacion.js` — used on all customer forms
 
-**Tickets:** `src/js/tickets.js` exports a `Tickets` object (not plain functions like other modules) with `init()`, `generarHTML()`, and printing methods. QR codes are generated in the main process via `qrcode` library.
+**Tickets:** `src/js/tickets.js` exports a `Tickets` object (not plain functions like other modules) with `init()`, `generarHTML()`, and printing methods. For 58mm, typography profiles are supported: `compacto`, `legible`, `extra_grande`.
 
-**Data exports:** CSV via plain JS, JSON for backups, Excel via ExcelJS with color-coded rows and auto-filters. All exports go to `app.getPath('userData')/backups/`.
+**Data exports:** CSV via plain JS, JSON for backups, Excel via `excel4node` with formatted headers/columns. All exports go to `app.getPath('userData')/backups/`.
 
 **Backups:** automatic every 24h + on app close (`before-quit`). Old backups auto-cleaned after 30 days. Optional Dropbox upload after each backup.

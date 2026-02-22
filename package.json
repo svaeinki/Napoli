@@ -1,6 +1,6 @@
 {
   "name": "napoli-reparadora",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "description": "Sistema de gestión de bodega para Napoli - Reparadora de Calzado",
   "main": "main.js",
   "scripts": {
@@ -38,8 +38,7 @@
     "better-sqlite3": "^12.6.2",
     "dropbox": "^10.34.0",
     "excel4node": "^1.8.2",
-    "isomorphic-fetch": "^3.0.0",
-    "qrcode": "^1.5.4"
+    "isomorphic-fetch": "^3.0.0"
   },
   "build": {
     "appId": "com.napoli.reparadora",

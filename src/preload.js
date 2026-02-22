@@ -41,8 +41,5 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
     // Configuración
     obtenerConfiguracion: () => ipcRenderer.invoke('config:obtener'),
-    guardarConfiguracion: (config) => ipcRenderer.invoke('config:guardar', config),
-
-    // Utilidades
-    generarQR: (texto) => ipcRenderer.invoke('util:generarQR', texto)
+    guardarConfiguracion: (config) => ipcRenderer.invoke('config:guardar', config)
 });

@@ -1,7 +1,6 @@
 const { app, BrowserWindow, ipcMain, shell, safeStorage, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
-const QRCode = require('qrcode');
 const BetterSqlite = require('better-sqlite3');
 const DatabaseManager = require('./src/database');
 const DropboxManager = require('./src/dropbox');
@@ -419,10 +418,15 @@ function descifrarToken(tokenCifrado) {
 
 function sanitizarConfigImpresora(printerConfig = {}) {
     const widthsPermitidos = new Set(['58mm', '80mm']);
+    const perfilesPermitidos = new Set(['compacto', 'legible', 'extra_grande']);
     const width = widthsPermitidos.has(printerConfig.width) ? printerConfig.width : '58mm';
+    const fontProfileRaw = typeof printerConfig.fontProfile58 === 'string'
+        ? printerConfig.fontProfile58.trim().toLowerCase()
+        : '';
+    const fontProfile58 = perfilesPermitidos.has(fontProfileRaw) ? fontProfileRaw : 'legible';
     const header = typeof printerConfig.header === 'string' ? printerConfig.header.slice(0, 500) : '';
     const footer = typeof printerConfig.footer === 'string' ? printerConfig.footer.slice(0, 500) : '';
-    return { width, header, footer };
+    return { width, header, footer, fontProfile58 };
 }
 
 function operacionBloqueadaPorRestore() {
@@ -1082,7 +1086,7 @@ ipcMain.handle('dropbox:subirBackupAhora', async () => {
 ipcMain.handle('config:obtener', async () => {
     const config = cargarConfiguracion();
     return {
-        printer: config.printer || {}
+        printer: sanitizarConfigImpresora(config.printer || {})
     };
 });
 
@@ -1111,19 +1115,6 @@ ipcMain.handle('config:guardar', async (event, nuevaConfig) => {
 ipcMain.handle('imprimir', async () => {
     if (mainWindow) {
         mainWindow.webContents.print({ silent: false, printBackground: false });
-    }
-});
-
-// ============================================
-// HANDLER IPC - UTILIDADES
-// ============================================
-
-ipcMain.handle('util:generarQR', async (event, texto) => {
-    try {
-        return await QRCode.toDataURL(texto);
-    } catch (error) {
-        console.error('Error generando QR:', error);
-        return null;
     }
 });
 

@@ -1,8 +1,8 @@
 # 👞 Napoli - Reparadora de Calzado
 
-Sistema profesional de gestión de bodega para reparadora de calzado con base de datos SQLite, backups automáticos en Dropbox, sistema completo de pagos y abonos, tickets térmicos con QR y tema oscuro.
+Sistema profesional de gestión de bodega para reparadora de calzado con base de datos SQLite, backups automáticos en Dropbox, sistema completo de pagos y abonos, tickets térmicos y tema oscuro.
 
-![Version](https://img.shields.io/badge/version-2.0.1-blue.svg)
+![Version](https://img.shields.io/badge/version-2.0.2-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)
 
@@ -13,18 +13,18 @@ Sistema profesional de gestión de bodega para reparadora de calzado con base de
 ### 📦 Gestión de Inventario
 - ✅ Registro completo de artículos y servicios de reparación
 - ✅ Múltiples tipos de servicio (cambio suela, taco, costura, teñido, limpieza, etc.)
-- ✅ Asignación automática de números de bodega
+- ✅ Ubicación opcional por artículo (`numeroBodega`)
 - ✅ Estados: "En Bodega" / "Entregado"
-- ✅ Búsqueda avanzada por RUT, nombre, número de bodega
+- ✅ Búsqueda avanzada por RUT, nombre y ubicación
 - ✅ Filtros por estado
 - ✅ Exportación a CSV
 - ✅ Contador de días en bodega con alertas visuales
 
-### 🖨️ Tickets Térmicos & QR (¡Nuevo!)
+### 🖨️ Tickets Térmicos (58mm/80mm)
 - ✅ **Soporte Impresoras Térmicas**: Configurable para 58mm y 80mm.
-- ✅ **Códigos QR**: Cada ticket incluye un QR único para escaneo rápido.
+- ✅ **Perfiles de legibilidad 58mm**: `compacto`, `legible` (recomendado), `extra_grande`.
 - ✅ **Diseño Profesional**: Formato tipo "receipt" optimizado para ahorro de papel.
-- ✅ **Configurable**: Posibilidad de personalizar encabezado y pie de página desde la app.
+- ✅ **Configurable**: Posibilidad de personalizar encabezado, pie y perfil tipográfico 58mm desde la app.
 
 ### 💰 Sistema de Pagos y Abonos
 - ✅ Registro de valor total del servicio
@@ -253,14 +253,16 @@ gyp ERR! build error
 ### Configurar Impresora ⚙️
 1. Click en el icono de engranaje (arriba a la derecha).
 2. Selecciona el ancho de tu papel (58mm estándar o 80mm ancho).
-3. Personaliza el texto del encabezado (ej: Dirección, redes sociales).
-4. Dale a "Guardar".
+3. Si usas 58mm, elige el tamaño de letra: Compacto / Legible / Extra grande.
+4. Personaliza el texto del encabezado y pie de página.
+5. Dale a "Guardar".
 
 ### Ingresar Nuevo Artículo
 1. Click en **"➕ Ingresar Artículo"**.
 2. Completa los datos (RUT se valida automáticamente).
-3. Click en **"💾 Guardar e Imprimir Ticket"**.
-4. ¡Listo! Se imprimirá el ticket con QR.
+3. `Ubicación` es opcional.
+4. Click en **"💾 Guardar e Imprimir Ticket"**.
+5. ¡Listo! Se imprimirá el ticket con el perfil seleccionado.
 
 ---
 
@@ -276,7 +278,7 @@ zapateria-bodega/
 │   │   ├── styles.css           # Estilos UI
 │   │   └── ticket.css           # Estilos de impresión térmicos
 │   ├── js/
-│   │   ├── tickets.js           # Lógica de tickets y QR
+│   │   ├── tickets.js           # Lógica de tickets térmicos
 │   │   ├── config.js            # Lógica de configuración
 │   │   └── ...
 │   ├── database.js              # Gestión de SQLite
@@ -289,6 +291,11 @@ zapateria-bodega/
 ---
 
 ## 📝 Changelog
+
+### v2.0.2 (2026-02-22)
+- 🖨️ Perfiles tipográficos para tickets 58mm: `compacto`, `legible` y `extra_grande`.
+- 📄 Tickets sin QR (flujo simplificado de impresión).
+- 🧾 Versión y documentación alineadas a `2.0.2` con ubicación opcional en inventario.
 
 ### v2.0.1 (2026-02-22)
 - 🔒 Migración de exportación Excel a `excel4node` para eliminar vulnerabilidades HIGH/CRITICAL en dependencias runtime.
