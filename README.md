@@ -183,6 +183,63 @@ Para resetear la base de datos: cierra la app y elimina el archivo `.db`. Se rec
 
 ---
 
+## 📦 Generar Builds por Sistema Operativo
+
+Esta sección explica cómo empaquetar instaladores de la app para cada SO usando `electron-builder`.
+
+### Requisitos previos (build)
+
+```bash
+npm install
+npm run rebuild
+```
+
+### Build para Windows (NSIS `.exe`)
+
+```bash
+npm run build-win
+```
+
+Salida esperada:
+- Archivos de instalación en `dist/` (ejemplo: `.exe` de NSIS para `x64`).
+
+### Build para macOS (`.dmg`)
+
+```bash
+npm run build-mac
+```
+
+Salida esperada:
+- Imagen de disco `.dmg` en `dist/`.
+
+### Build combinada (macOS + Windows)
+
+```bash
+npm run build
+```
+
+Este script ejecuta:
+- `electron-builder --mac --win`
+
+> Recomendación práctica: generar cada build en su SO nativo para evitar problemas de toolchain/firma y acelerar troubleshooting.
+
+### Validación mínima antes de build de release
+
+```bash
+npm run release:check
+```
+
+Valida:
+1. Sintaxis JS
+2. Auditoría de dependencias runtime
+3. Build de Windows sin publicar
+
+### Nota sobre Linux
+
+Actualmente `package.json` no define target de empaquetado Linux (`linux`) en la configuración de `electron-builder`, por eso no hay script `build-linux`.
+
+---
+
 ### ✅ Checklist de Release (obligatorio)
 
 Antes de publicar una versión, ejecuta:
