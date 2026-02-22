@@ -1,6 +1,6 @@
 {
   "name": "napoli-reparadora",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "Sistema de gestión de bodega para Napoli - Reparadora de Calzado",
   "main": "main.js",
   "scripts": {
@@ -9,7 +9,11 @@
     "rebuild": "electron-rebuild",
     "build": "electron-builder --mac --win",
     "build-mac": "electron-builder --mac",
-    "build-win": "electron-builder --win"
+    "build-win": "electron-builder --win",
+    "check:syntax": "node scripts/check-syntax.js",
+    "check:audit": "npm audit --omit=dev --audit-level=high",
+    "check:build-win": "electron-builder --win --publish never",
+    "release:check": "npm run check:syntax && npm run check:audit && npm run check:build-win"
   },
   "keywords": [
     "electron",
@@ -33,7 +37,7 @@
   "dependencies": {
     "better-sqlite3": "^12.6.2",
     "dropbox": "^10.34.0",
-    "exceljs": "^4.1.1",
+    "excel4node": "^1.8.2",
     "isomorphic-fetch": "^3.0.0",
     "qrcode": "^1.5.4"
   },

@@ -2,7 +2,7 @@
 
 Sistema profesional de gestión de bodega para reparadora de calzado con base de datos SQLite, backups automáticos en Dropbox, sistema completo de pagos y abonos, tickets térmicos con QR y tema oscuro.
 
-![Version](https://img.shields.io/badge/version-2.1.0-blue.svg)
+![Version](https://img.shields.io/badge/version-2.0.1-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)
 
@@ -183,6 +183,23 @@ Para resetear la base de datos: cierra la app y elimina el archivo `.db`. Se rec
 
 ---
 
+### ✅ Checklist de Release (obligatorio)
+
+Antes de publicar una versión, ejecuta:
+
+```bash
+npm run release:check
+```
+
+Este comando valida, en orden:
+1. Sintaxis JS (`check:syntax`)
+2. Seguridad de dependencias runtime (`check:audit`)
+3. Build de Windows (`check:build-win`)
+
+Si cualquiera falla, la release no debe publicarse.
+
+---
+
 ## 🔄 Actualizar sin perder datos (recomendado)
 
 ### Método recomendado
@@ -273,11 +290,11 @@ zapateria-bodega/
 
 ## 📝 Changelog
 
-### v2.1.0 (2024-12-06)
-- ✨ **Tickets Térmicos**: Soporte nativo para impresión térmica (58mm/80mm).
-- ✨ **Códigos QR**: Identificación rápida de pedidos mediante QR.
-- ✨ **Panel de Configuración**: Interfaz para ajustar parámetros de impresión.
-- 🔧 **Refactorización**: Modularización de la lógica de tickets (`tickets.js`).
+### v2.0.1 (2026-02-22)
+- 🔒 Migración de exportación Excel a `excel4node` para eliminar vulnerabilidades HIGH/CRITICAL en dependencias runtime.
+- 🛡️ Fail-fast en IPC `db:*` y `pago:*` durante restauración de DB para evitar errores por concurrencia.
+- ✅ Nuevo gate de release: `check:syntax`, `check:audit`, `check:build-win` y `release:check`.
+- 🧾 Versionado y documentación alineados a `2.0.1`.
 
 ### v2.0.0 (2024-12-03)
 - ✨ Sistema de tema claro/oscuro

@@ -18,6 +18,7 @@ const BACKUP_STATUS_PATH = path.join(USER_DATA_PATH, 'backup-status.json');
 const BACKUP_CLOSE_TIMEOUT_MS = 15000;
 const DROPBOX_UPLOAD_TIMEOUT_MS = 12000;
 const REQUIRED_BACKUP_TABLES = ['articulos', 'abonos', 'auditoria'];
+const RESTORE_BUSY_MESSAGE = 'Restauración en curso. Intente nuevamente al terminar.';
 const WARNING_TOKEN_NO_CIFRADO = 'Tu sistema no permite cifrado local del token de Dropbox; se guardará sin cifrar en este equipo.';
 let restauracionEnCurso = false;
 
@@ -424,6 +425,24 @@ function sanitizarConfigImpresora(printerConfig = {}) {
     return { width, header, footer };
 }
 
+function operacionBloqueadaPorRestore() {
+    return restauracionEnCurso;
+}
+
+function respuestaBloqueoRestoreEscritura() {
+    if (!operacionBloqueadaPorRestore()) {
+        return null;
+    }
+    return { success: false, error: RESTORE_BUSY_MESSAGE };
+}
+
+function respuestaBloqueoRestoreLectura(valorPorDefecto) {
+    if (!operacionBloqueadaPorRestore()) {
+        return null;
+    }
+    return valorPorDefecto;
+}
+
 function withTimeout(promise, timeoutMs, timeoutMessage) {
     let timeoutId;
     const timeoutPromise = new Promise((_, reject) => {
@@ -546,34 +565,57 @@ app.on('before-quit', (event) => {
 // ============================================
 
 ipcMain.handle('db:insertar', async (event, articulo) => {
+    const bloqueo = respuestaBloqueoRestoreEscritura();
+    if (bloqueo) return bloqueo;
+    if (!db) return { success: false, error: 'Base de datos no inicializada' };
     return db.insertar(articulo);
 });
 
 ipcMain.handle('db:obtenerTodos', async () => {
+    const bloqueo = respuestaBloqueoRestoreLectura([]);
+    if (bloqueo) return bloqueo;
+    if (!db) return [];
     return db.obtenerTodos();
 });
 
 ipcMain.handle('db:obtenerPorId', async (event, id) => {
+    if (operacionBloqueadaPorRestore()) return null;
+    if (!db) return null;
     return db.obtenerPorId(id);
 });
 
 ipcMain.handle('db:actualizarEstado', async (event, id, nuevoEstado) => {
+    const bloqueo = respuestaBloqueoRestoreEscritura();
+    if (bloqueo) return bloqueo;
+    if (!db) return { success: false, error: 'Base de datos no inicializada' };
     return db.actualizarEstado(id, nuevoEstado);
 });
 
 ipcMain.handle('db:eliminar', async (event, id) => {
+    const bloqueo = respuestaBloqueoRestoreEscritura();
+    if (bloqueo) return bloqueo;
+    if (!db) return { success: false, error: 'Base de datos no inicializada' };
     return db.eliminar(id);
 });
 
 ipcMain.handle('db:buscar', async (event, termino) => {
+    const bloqueo = respuestaBloqueoRestoreLectura([]);
+    if (bloqueo) return bloqueo;
+    if (!db) return [];
     return db.buscar(termino);
 });
 
 ipcMain.handle('db:obtenerEstadisticas', async () => {
+    const bloqueo = respuestaBloqueoRestoreLectura({ total: 0, enBodega: 0, entregados: 0 });
+    if (bloqueo) return bloqueo;
+    if (!db) return { total: 0, enBodega: 0, entregados: 0 };
     return db.obtenerEstadisticas();
 });
 
 ipcMain.handle('db:migrarDesdeLocalStorage', async (event, datosJSON) => {
+    const bloqueo = respuestaBloqueoRestoreEscritura();
+    if (bloqueo) return bloqueo;
+    if (!db) return { success: false, error: 'Base de datos no inicializada' };
     return db.migrarDesdeLocalStorage(datosJSON);
 });
 
@@ -582,14 +624,23 @@ ipcMain.handle('db:migrarDesdeLocalStorage', async (event, datosJSON) => {
 // ============================================
 
 ipcMain.handle('pago:registrarAbono', async (event, articuloId, monto, metodoPago, observaciones) => {
+    const bloqueo = respuestaBloqueoRestoreEscritura();
+    if (bloqueo) return bloqueo;
+    if (!db) return { success: false, error: 'Base de datos no inicializada' };
     return db.registrarAbono(articuloId, monto, metodoPago, observaciones);
 });
 
 ipcMain.handle('pago:obtenerAbonos', async (event, articuloId) => {
+    const bloqueo = respuestaBloqueoRestoreLectura([]);
+    if (bloqueo) return bloqueo;
+    if (!db) return [];
     return db.obtenerAbonosArticulo(articuloId);
 });
 
 ipcMain.handle('pago:actualizarValor', async (event, articuloId, nuevoValor) => {
+    const bloqueo = respuestaBloqueoRestoreEscritura();
+    if (bloqueo) return bloqueo;
+    if (!db) return { success: false, error: 'Base de datos no inicializada' };
     return db.actualizarValorTotal(articuloId, nuevoValor);
 });
 
@@ -778,96 +829,116 @@ function exportarJSON() {
 
 async function exportarExcel() {
     try {
-        if (restauracionEnCurso) {
-            throw new Error('Restauración en curso. Intente nuevamente al terminar.');
-        }
+        const bloqueo = respuestaBloqueoRestoreEscritura();
+        if (bloqueo) return bloqueo;
 
         if (!db) {
             throw new Error('Base de datos no inicializada');
         }
 
-        const ExcelJS = require('exceljs');
+        const xl = require('excel4node');
         const timestamp = timestampIsoSeguro();
         const excelPath = path.join(BACKUPS_PATH, `napoli_inventario_${timestamp}.xlsx`);
 
-        const workbook = new ExcelJS.Workbook();
+        const workbook = new xl.Workbook();
         const worksheet = workbook.addWorksheet('Inventario Napoli');
+        const toText = (value) => (value === null || value === undefined ? '' : String(value));
+        const toNumber = (value) => {
+            const parsed = Number(value);
+            return Number.isFinite(parsed) ? parsed : 0;
+        };
 
         // Configurar columnas
-        worksheet.columns = [
-            { header: 'ID', key: 'id', width: 8 },
-            { header: 'RUT', key: 'rut', width: 15 },
-            { header: 'Cliente', key: 'nombreCliente', width: 25 },
-            { header: 'Teléfono', key: 'telefono', width: 15 },
-            { header: 'Tipo Servicio', key: 'tipoArticulo', width: 20 },
-            { header: 'Descripción', key: 'descripcion', width: 40 },
-            { header: 'Ubicación (opcional)', key: 'numeroBodega', width: 20 },
-            { header: 'Fecha Ingreso', key: 'fechaIngreso', width: 18 },
-            { header: 'Estado', key: 'estado', width: 12 },
-            { header: 'Fecha Entrega', key: 'fechaEntrega', width: 18 },
-            { header: 'Valor Total', key: 'valorTotal', width: 12 },
-            { header: 'Total Abonado', key: 'totalAbonado', width: 12 },
-            { header: 'Saldo Pendiente', key: 'saldoPendiente', width: 15 },
-            { header: 'Estado Pago', key: 'estadoPago', width: 12 },
-            { header: 'Observaciones', key: 'observaciones', width: 30 }
+        const columns = [
+            { header: 'ID', width: 8 },
+            { header: 'RUT', width: 15 },
+            { header: 'Cliente', width: 25 },
+            { header: 'Teléfono', width: 15 },
+            { header: 'Tipo Servicio', width: 20 },
+            { header: 'Descripción', width: 40 },
+            { header: 'Ubicación (opcional)', width: 20 },
+            { header: 'Fecha Ingreso', width: 18 },
+            { header: 'Estado', width: 12 },
+            { header: 'Fecha Entrega', width: 18 },
+            { header: 'Valor Total', width: 14 },
+            { header: 'Total Abonado', width: 14 },
+            { header: 'Saldo Pendiente', width: 16 },
+            { header: 'Estado Pago', width: 12 },
+            { header: 'Observaciones', width: 30 }
         ];
+        columns.forEach((column, index) => {
+            worksheet.column(index + 1).setWidth(column.width);
+        });
 
-        // Estilo del encabezado
-        worksheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
-        worksheet.getRow(1).fill = {
-            type: 'pattern',
-            pattern: 'solid',
-            fgColor: { argb: 'FF667eea' }
-        };
-        worksheet.getRow(1).alignment = { vertical: 'middle', horizontal: 'center' };
-        worksheet.getRow(1).height = 25;
+        const headerStyle = workbook.createStyle({
+            font: {
+                bold: true,
+                color: '#FFFFFF'
+            },
+            fill: {
+                type: 'pattern',
+                patternType: 'solid',
+                fgColor: '#667EEA'
+            },
+            alignment: {
+                horizontal: 'center',
+                vertical: 'center',
+                wrapText: true
+            }
+        });
+        const moneyStyle = workbook.createStyle({
+            numberFormat: '$#,##0'
+        });
+        const centeredStyle = workbook.createStyle({
+            alignment: {
+                horizontal: 'center',
+                vertical: 'center'
+            }
+        });
+        const wrappedStyle = workbook.createStyle({
+            alignment: {
+                vertical: 'center',
+                wrapText: true
+            }
+        });
+
+        columns.forEach((column, index) => {
+            worksheet.cell(1, index + 1).string(column.header).style(headerStyle);
+        });
 
         // Obtener datos
         const datos = db.obtenerTodos();
 
         // Agregar filas
-        datos.forEach(articulo => {
-            const row = worksheet.addRow({
-                id: articulo.id,
-                rut: articulo.rut,
-                nombreCliente: articulo.nombreCliente,
-                telefono: articulo.telefono || '',
-                tipoArticulo: articulo.tipoArticulo,
-                descripcion: articulo.descripcion,
-                numeroBodega: articulo.numeroBodega || '',
-                fechaIngreso: articulo.fechaIngreso,
-                estado: articulo.estado,
-                fechaEntrega: articulo.fechaEntrega || '',
-                valorTotal: articulo.valorTotal || 0,
-                totalAbonado: articulo.totalAbonado || 0,
-                saldoPendiente: articulo.saldoPendiente || 0,
-                estadoPago: articulo.estadoPago || 'Sin pago',
-                observaciones: articulo.observaciones || ''
-            });
-
-            // Formato de moneda para columnas de dinero
-            row.getCell('valorTotal').numFmt = '$#,##0';
-            row.getCell('totalAbonado').numFmt = '$#,##0';
-            row.getCell('saldoPendiente').numFmt = '$#,##0';
-
-            // Color de fondo según estado
-            if (articulo.estado === 'Entregado') {
-                row.fill = {
-                    type: 'pattern',
-                    pattern: 'solid',
-                    fgColor: { argb: 'FFE8F5E9' }
-                };
-            }
+        datos.forEach((articulo, index) => {
+            const row = index + 2;
+            worksheet.cell(row, 1).number(toNumber(articulo.id)).style(centeredStyle);
+            worksheet.cell(row, 2).string(toText(articulo.rut));
+            worksheet.cell(row, 3).string(toText(articulo.nombreCliente)).style(wrappedStyle);
+            worksheet.cell(row, 4).string(toText(articulo.telefono));
+            worksheet.cell(row, 5).string(toText(articulo.tipoArticulo)).style(wrappedStyle);
+            worksheet.cell(row, 6).string(toText(articulo.descripcion)).style(wrappedStyle);
+            worksheet.cell(row, 7).string(toText(articulo.numeroBodega));
+            worksheet.cell(row, 8).string(toText(articulo.fechaIngreso));
+            worksheet.cell(row, 9).string(toText(articulo.estado)).style(centeredStyle);
+            worksheet.cell(row, 10).string(toText(articulo.fechaEntrega));
+            worksheet.cell(row, 11).number(toNumber(articulo.valorTotal)).style(moneyStyle);
+            worksheet.cell(row, 12).number(toNumber(articulo.totalAbonado)).style(moneyStyle);
+            worksheet.cell(row, 13).number(toNumber(articulo.saldoPendiente)).style(moneyStyle);
+            worksheet.cell(row, 14).string(toText(articulo.estadoPago || 'Sin pago')).style(centeredStyle);
+            worksheet.cell(row, 15).string(toText(articulo.observaciones)).style(wrappedStyle);
         });
 
-        // Agregar filtros
-        worksheet.autoFilter = {
-            from: 'A1',
-            to: 'O1'
-        };
-
         // Guardar archivo
-        await workbook.xlsx.writeFile(excelPath);
+        await new Promise((resolve, reject) => {
+            workbook.write(excelPath, (error) => {
+                if (error) {
+                    reject(error);
+                    return;
+                }
+                resolve();
+            });
+        });
         console.log('✅ Excel exportado:', excelPath);
 
         // Subir a Dropbox si está configurado
