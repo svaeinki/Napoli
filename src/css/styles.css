@@ -123,6 +123,54 @@ body.dark-theme .dropbox-config {
     border-color: #3d5a7a;
 }
 
+body.dark-theme .checklist-item {
+    background: #1f2833;
+    border-color: #3f536b;
+    color: #d8e3ef;
+}
+
+body.dark-theme .checklist-item.ok {
+    background: #213828;
+    border-color: #4caf50;
+    color: #b9e6c1;
+}
+
+body.dark-theme .checklist-item.pending {
+    background: #3d3221;
+    border-color: #ffb74d;
+    color: #ffd89c;
+}
+
+body.dark-theme .checklist-item.warn {
+    background: #1e3445;
+    border-color: #4fc3f7;
+    color: #b8e3f8;
+}
+
+body.dark-theme .restore-status {
+    background: #1f2833;
+    border-color: #3f536b;
+    color: #d8e3ef;
+}
+
+body.dark-theme .restore-status.success {
+    background: #213828;
+    border-color: #4caf50;
+    color: #b9e6c1;
+}
+
+body.dark-theme .restore-status.error {
+    background: #3d2323;
+    border-color: #f44336;
+    color: #ffc8c8;
+}
+
+body.dark-theme .restore-status.warning {
+    background: #3d3221;
+    border-color: #ffb74d;
+    color: #ffd89c;
+}
+
 body.dark-theme .abono-item {
     background: var(--bg-secondary);
 }
@@ -502,6 +550,76 @@ tbody tr:hover {
     display: flex;
     gap: 10px;
     flex-wrap: wrap;
+}
+
+.upgrade-checklist {
+    list-style: none;
+    margin: 0 0 10px 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.checklist-item {
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.checklist-item.ok {
+    border-color: #4caf50;
+    background: #e8f5e9;
+    color: #2e7d32;
+}
+
+.checklist-item.pending {
+    border-color: #ff9800;
+    background: #fff8e1;
+    color: #a06600;
+}
+
+.checklist-item.warn {
+    border-color: #29b6f6;
+    background: #e1f5fe;
+    color: #0277bd;
+}
+
+.checklist-summary {
+    margin: 8px 0 12px 0;
+    color: var(--text-secondary);
+}
+
+.restore-status {
+    margin-top: 12px;
+    padding: 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+.restore-status.success {
+    border-color: #4caf50;
+    background: #e8f5e9;
+    color: #2e7d32;
+}
+
+.restore-status.error {
+    border-color: #f44336;
+    background: #ffebee;
+    color: #c62828;
+}
+
+.restore-status.warning {
+    border-color: #ff9800;
+    background: #fff8e1;
+    color: #a06600;
 }
 
 .dropbox-config {

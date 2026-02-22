@@ -1,16 +1,28 @@
+const CONFIG_IMPRESION_DEFAULT = {
+    width: '58mm', // '58mm' o '80mm'
+    header: 'NAPOLI\nReparadora de Calzado',
+    footer: 'Gracias por preferir Napoli\nConserve este ticket'
+};
+
+function textoConDefault(texto, fallback) {
+    if (typeof texto !== 'string') return fallback;
+    return texto.trim() ? texto : fallback;
+}
+
 const Tickets = {
     // Configuración por defecto
-    config: {
-        width: '58mm', // '58mm' o '80mm'
-        header: 'NAPOLI\nReparadora de Calzado',
-        footer: 'Gracias por su preferencia\nConserve este ticket'
-    },
+    config: { ...CONFIG_IMPRESION_DEFAULT },
 
     async init() {
         // Cargar configuración guardada
         const savedConfig = await window.electronAPI.obtenerConfiguracion();
-        if (savedConfig.printer) {
-            this.config = { ...this.config, ...savedConfig.printer };
+        if (savedConfig && savedConfig.printer) {
+            const printer = savedConfig.printer;
+            this.config = {
+                width: printer.width === '80mm' ? '80mm' : CONFIG_IMPRESION_DEFAULT.width,
+                header: textoConDefault(printer.header, CONFIG_IMPRESION_DEFAULT.header),
+                footer: textoConDefault(printer.footer, CONFIG_IMPRESION_DEFAULT.footer)
+            };
         }
     },
 
@@ -32,6 +44,7 @@ const Tickets = {
         // Formatear textos
         const headerHtml = escaparHtml(String(this.config.header || '')).replace(/\n/g, '<br>');
         const footerHtml = escaparHtml(String(this.config.footer || '')).replace(/\n/g, '<br>');
+        const numeroBodega = typeof articulo.numeroBodega === 'string' ? articulo.numeroBodega.trim() : '';
 
         return `
             <div class="ticket-content ${widthClass}">
@@ -70,12 +83,14 @@ const Tickets = {
                         <span style="font-size: 11px;">${escaparHtml(articulo.descripcion)}</span>
                     </div>
 
+                    ${numeroBodega ? `
                     <div class="ticket-divider"></div>
                     
-                    <center>NÚMERO DE BODEGA</center>
+                    <center>UBICACIÓN</center>
                     <span class="ticket-big-text">
-                        ${escaparHtml(articulo.numeroBodega)}
+                        ${escaparHtml(numeroBodega)}
                     </span>
+                    ` : ''}
 
                     ${articulo.valorTotal > 0 ? `
                         <div class="ticket-totals">

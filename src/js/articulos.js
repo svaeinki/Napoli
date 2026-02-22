@@ -30,13 +30,15 @@ async function ingresarArticulo(e) {
         return;
     }
 
+    const numeroBodegaInput = document.getElementById('numeroBodega').value.trim();
+
     const nuevoArticulo = {
         rut: formatearRUT(rutInput),
         nombreCliente: document.getElementById('nombreCliente').value.trim(),
         telefono: document.getElementById('telefono').value.trim(),
         tipoArticulo: document.getElementById('tipoArticulo').value,
         descripcion: document.getElementById('descripcion').value.trim(),
-        numeroBodega: document.getElementById('numeroBodega').value.trim().toUpperCase(),
+        numeroBodega: numeroBodegaInput ? numeroBodegaInput.toUpperCase() : null,
         observaciones: document.getElementById('observaciones').value.trim(),
         fechaIngreso: new Date().toLocaleString('es-CL'),
         valorTotal: valorTotal
@@ -59,11 +61,14 @@ async function ingresarArticulo(e) {
         document.getElementById('formIngresar').reset();
         mostrarNotificacion('✅ Artículo ingresado correctamente. Imprimiendo ticket...');
 
-        generarTicket(articuloCompleto);
-
-        setTimeout(() => {
-            window.electronAPI.imprimir();
-        }, 500);
+        const ticketGenerado = await generarTicket(articuloCompleto);
+        if (ticketGenerado) {
+            setTimeout(() => {
+                window.electronAPI.imprimir();
+            }, 500);
+        } else {
+            mostrarNotificacion('⚠️ Artículo guardado, pero no se pudo generar el ticket', true);
+        }
 
         await actualizarInventario();
     } else {
@@ -130,9 +135,11 @@ async function generarTicket(articulo) {
             previewContainer.innerHTML = ticketHtml;
             document.getElementById('ticket').style.display = 'block';
         }
+        return true;
     } catch (error) {
         console.error('Error generando ticket:', error);
         mostrarNotificacion('❌ Error generando ticket', true);
+        return false;
     }
 }
 
@@ -146,6 +153,9 @@ async function verTicket(id) {
         // Cargar modal si no existe en el DOM (aunque index.html debe tener el container)
         // Usaremos templateLoader si es necesario, pero asumimos que el fetch funciona
         const response = await fetch('html/modal-ticket.html');
+        if (!response.ok) {
+            throw new Error(`No se pudo cargar modal-ticket.html (HTTP ${response.status})`);
+        }
         const modalHtml = await response.text();
 
         document.getElementById('modalTicketContainer').innerHTML = modalHtml;
@@ -165,10 +175,12 @@ async function verTicket(id) {
 async function reimprimirTicket(id) {
     const articulo = await window.electronAPI.obtenerPorId(id);
     if (articulo) {
-        await generarTicket(articulo);
-        setTimeout(() => {
-            window.electronAPI.imprimir();
-        }, 500); // Pequeño delay para asegurar que el DOM se actualizó
+        const ticketGenerado = await generarTicket(articulo);
+        if (ticketGenerado) {
+            setTimeout(() => {
+                window.electronAPI.imprimir();
+            }, 500); // Pequeño delay para asegurar que el DOM se actualizó
+        }
     }
 }
 

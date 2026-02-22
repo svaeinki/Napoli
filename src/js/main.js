@@ -5,11 +5,16 @@
 window.onload = async function () {
     console.log('🚀 Aplicación iniciada');
 
-    // Esperar a que los templates se carguen completamente
-    await window.templatesListos;
+    try {
+        // Esperar a que los templates se carguen completamente
+        await window.templatesListos;
 
-    await actualizarInventario();
-    await verificarDropbox();
+        await actualizarInventario();
+        await verificarDropbox();
+    } catch (error) {
+        console.error('❌ Error en inicialización de la aplicación:', error);
+        alert('No se pudo iniciar la aplicación correctamente. Reinicia la app y revisa los archivos HTML.');
+    }
 };
 
 // ============================================
@@ -30,6 +35,12 @@ document.addEventListener('keydown', (e) => {
     const activeElement = document.activeElement;
     const isInput = activeElement.tagName === 'INPUT' || activeElement.tagName === 'TEXTAREA';
     const isSearchInput = activeElement.id === 'campoBuscar';
+
+    // Evitar falsos positivos del escáner cuando el usuario escribe en formularios.
+    if (isInput && !isSearchInput) {
+        scanBuffer = '';
+        return;
+    }
 
     // Si es Enter
     if (e.key === 'Enter') {

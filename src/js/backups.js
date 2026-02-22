@@ -2,6 +2,126 @@
 // BACKUPS Y DROPBOX
 // ============================================
 
+let backupSeleccionadoPath = '';
+
+function formatearFechaHora(fechaIso) {
+    if (!fechaIso) return 'N/A';
+    const fecha = new Date(fechaIso);
+    if (Number.isNaN(fecha.getTime())) return 'N/A';
+    return fecha.toLocaleString('es-CL');
+}
+
+function setRestoreStatus(mensajeHtml, tipo = 'warning') {
+    const box = document.getElementById('restoreStatusBox');
+    if (!box) return;
+
+    box.className = `restore-status ${tipo}`;
+    box.style.display = 'block';
+    box.innerHTML = mensajeHtml;
+}
+
+function actualizarChecklistItem(id, clase, texto) {
+    const item = document.getElementById(id);
+    if (!item) return;
+
+    item.className = `checklist-item ${clase}`;
+    item.textContent = texto;
+}
+
+function actualizarChecklistResumen(texto) {
+    const resumen = document.getElementById('checklistResumen');
+    if (!resumen) return;
+    resumen.textContent = texto;
+}
+
+async function refrescarChecklistActualizacion() {
+    const itemBackup = document.getElementById('checkBackupLocal');
+    if (!itemBackup) {
+        return;
+    }
+
+    try {
+        const estado = await window.electronAPI.backupObtenerEstado();
+        if (!estado || !estado.success) {
+            actualizarChecklistItem('checkBackupLocal', 'pending', '⏳ Backup local .db validado');
+            actualizarChecklistItem('checkDropboxRecomendado', 'pending', 'ℹ️ Dropbox conectado (recomendado)');
+            actualizarChecklistResumen('No se pudo cargar estado de backups.');
+            return;
+        }
+
+        const lastBackup = estado.lastLocalBackup;
+        const lastValidation = estado.lastValidation;
+        const dropboxConfigured = !!estado.dropboxConfigured;
+
+        const hayBackupLocal = !!lastBackup;
+        const validacionOk = !!(lastValidation && lastValidation.valid);
+        const coincideRuta = !!(
+            hayBackupLocal &&
+            validacionOk &&
+            typeof lastValidation.path === 'string' &&
+            lastValidation.path === lastBackup.path
+        );
+        const checklistBackupOk = hayBackupLocal && validacionOk && coincideRuta;
+
+        if (checklistBackupOk) {
+            actualizarChecklistItem(
+                'checkBackupLocal',
+                'ok',
+                `✅ Backup validado (${lastBackup.name})`
+            );
+        } else if (!hayBackupLocal) {
+            actualizarChecklistItem(
+                'checkBackupLocal',
+                'pending',
+                '⏳ No hay backup local .db reciente'
+            );
+        } else if (!validacionOk) {
+            actualizarChecklistItem(
+                'checkBackupLocal',
+                'pending',
+                `⏳ Backup creado pero no validado (${lastBackup.name})`
+            );
+        } else {
+            actualizarChecklistItem(
+                'checkBackupLocal',
+                'pending',
+                '⏳ La validación no corresponde al último backup local'
+            );
+        }
+
+        if (dropboxConfigured) {
+            actualizarChecklistItem(
+                'checkDropboxRecomendado',
+                'ok',
+                '✅ Dropbox configurado (capa extra de respaldo)'
+            );
+        } else {
+            actualizarChecklistItem(
+                'checkDropboxRecomendado',
+                'warn',
+                'ℹ️ Dropbox no configurado (recomendado, pero opcional)'
+            );
+        }
+
+        if (checklistBackupOk) {
+            const detalleDropbox = dropboxConfigured
+                ? 'Checklist listo para actualización.'
+                : 'Checklist mínimo listo. Recomendado: configurar Dropbox.';
+            actualizarChecklistResumen(detalleDropbox);
+        } else {
+            const ultimaValidacion = lastValidation
+                ? ` Última validación: ${formatearFechaHora(lastValidation.timestamp)}.`
+                : '';
+            actualizarChecklistResumen(
+                `Falta completar validación de backup local antes de actualizar.${ultimaValidacion}`
+            );
+        }
+    } catch (error) {
+        console.error('Error refrescando checklist de actualización:', error);
+        actualizarChecklistResumen('Error verificando checklist de actualización.');
+    }
+}
+
 async function crearBackupManual() {
     const resultado = await window.electronAPI.crearBackup();
     if (resultado.success) {
@@ -10,6 +130,7 @@ async function crearBackupManual() {
         } else {
             mostrarNotificacion('✅ Backup creado correctamente');
         }
+        await refrescarChecklistActualizacion();
     } else {
         mostrarNotificacion('❌ Error al crear backup: ' + resultado.error, true);
     }
@@ -26,9 +147,9 @@ async function exportarJSONManual() {
 
 async function exportarExcel() {
     mostrarNotificacion('⏳ Exportando a Excel...', false);
-    
+
     const resultado = await window.electronAPI.exportarExcel();
-    
+
     if (resultado.success) {
         if (resultado.warning) {
             mostrarNotificacion(`⚠️ ${resultado.warning}`, true);
@@ -41,40 +162,197 @@ async function exportarExcel() {
 }
 
 async function abrirCarpetaBackups() {
-    await window.electronAPI.abrirCarpetaBackups();
+    const resultado = await window.electronAPI.abrirCarpetaBackups();
+    if (resultado && resultado.success === false) {
+        mostrarNotificacion('❌ Error abriendo carpeta de backups: ' + resultado.error, true);
+    }
+}
+
+async function seleccionarBackupParaRestore() {
+    try {
+        const seleccion = await window.electronAPI.backupSeleccionarArchivoDB();
+        if (!seleccion || !seleccion.success) {
+            mostrarNotificacion('❌ No se pudo abrir el selector de archivos', true);
+            return;
+        }
+        if (seleccion.canceled) {
+            return;
+        }
+
+        backupSeleccionadoPath = seleccion.path;
+        const input = document.getElementById('restoreBackupPath');
+        if (input) {
+            input.value = backupSeleccionadoPath;
+        }
+
+        setRestoreStatus(
+            `Archivo seleccionado: <strong>${escaparHtml(backupSeleccionadoPath)}</strong>`,
+            'warning'
+        );
+    } catch (error) {
+        console.error('Error seleccionando backup para restore:', error);
+        mostrarNotificacion('❌ Error seleccionando archivo de backup', true);
+    }
+}
+
+async function validarBackupSeleccionado() {
+    if (!backupSeleccionadoPath) {
+        try {
+            const estado = await window.electronAPI.backupObtenerEstado();
+            if (estado && estado.success && estado.lastLocalBackup && estado.lastLocalBackup.path) {
+                backupSeleccionadoPath = estado.lastLocalBackup.path;
+                const input = document.getElementById('restoreBackupPath');
+                if (input) {
+                    input.value = backupSeleccionadoPath;
+                }
+            } else {
+                mostrarNotificacion('❌ Seleccione primero un backup .db', true);
+                return;
+            }
+        } catch (error) {
+            mostrarNotificacion('❌ Seleccione primero un backup .db', true);
+            return;
+        }
+    }
+
+    try {
+        const resultado = await window.electronAPI.backupValidarDB(backupSeleccionadoPath);
+        await refrescarChecklistActualizacion();
+
+        if (resultado.success && resultado.valid) {
+            const ultimaValidacion = formatearFechaHora(new Date().toISOString());
+            setRestoreStatus(
+                [
+                    '<strong>✅ Backup válido</strong>',
+                    `Ruta: ${escaparHtml(resultado.path || backupSeleccionadoPath)}`,
+                    `Integridad: ${escaparHtml(resultado.integrity || 'ok')}`,
+                    `Tablas requeridas: ${resultado.tablesOk ? 'OK' : 'Incompleto'}`,
+                    `Validado: ${escaparHtml(ultimaValidacion)}`
+                ].join('<br>'),
+                'success'
+            );
+            mostrarNotificacion('✅ Backup validado correctamente');
+            return;
+        }
+
+        const mensajeError = resultado.error || 'El backup no cumple validaciones';
+        setRestoreStatus(
+            [
+                '<strong>❌ Backup inválido</strong>',
+                `Ruta: ${escaparHtml(resultado.path || backupSeleccionadoPath)}`,
+                `Detalle: ${escaparHtml(mensajeError)}`
+            ].join('<br>'),
+            'error'
+        );
+        mostrarNotificacion(`❌ Backup inválido: ${mensajeError}`, true);
+    } catch (error) {
+        console.error('Error validando backup seleccionado:', error);
+        setRestoreStatus(
+            `<strong>❌ Error validando backup</strong><br>${escaparHtml(error.message)}`,
+            'error'
+        );
+        mostrarNotificacion('❌ Error validando backup', true);
+    }
+}
+
+async function restaurarBackupSeleccionado() {
+    if (!backupSeleccionadoPath) {
+        mostrarNotificacion('❌ Seleccione primero un backup .db', true);
+        return;
+    }
+
+    const confirmacion = confirm(
+        `⚠️ Restaurarás la base actual desde este backup:\n\n${backupSeleccionadoPath}\n\n` +
+        'Se creará un snapshot previo y se intentará rollback automático si hay error.\n\n¿Continuar?'
+    );
+    if (!confirmacion) {
+        return;
+    }
+
+    try {
+        setRestoreStatus('⏳ Restaurando backup, por favor espere...', 'warning');
+        const resultado = await window.electronAPI.backupRestaurarDB(backupSeleccionadoPath);
+        await refrescarChecklistActualizacion();
+
+        if (resultado.success) {
+            const warningHtml = resultado.warning
+                ? `<br>Advertencia: ${escaparHtml(resultado.warning)}`
+                : '';
+            setRestoreStatus(
+                [
+                    '<strong>✅ Restauración completada</strong>',
+                    `Backup aplicado: ${escaparHtml(resultado.restoredPath || backupSeleccionadoPath)}`,
+                    `Rollback usado: ${resultado.rollbackUsed ? 'Sí' : 'No'}${warningHtml}`
+                ].join('<br>'),
+                'success'
+            );
+            mostrarNotificacion('✅ Base de datos restaurada correctamente');
+
+            if (typeof actualizarInventario === 'function') {
+                await actualizarInventario();
+            }
+            if (typeof buscarArticulos === 'function') {
+                const campoBuscar = document.getElementById('campoBuscar');
+                if (campoBuscar && campoBuscar.value.trim()) {
+                    await buscarArticulos();
+                }
+            }
+            return;
+        }
+
+        const warningHtml = resultado.warning
+            ? `<br>Advertencia: ${escaparHtml(resultado.warning)}`
+            : '';
+        setRestoreStatus(
+            [
+                '<strong>❌ Restauración fallida</strong>',
+                `Detalle: ${escaparHtml(resultado.error || 'Error desconocido')}`,
+                `Rollback usado: ${resultado.rollbackUsed ? 'Sí' : 'No'}${warningHtml}`
+            ].join('<br>'),
+            'error'
+        );
+        mostrarNotificacion(`❌ Error restaurando backup: ${resultado.error}`, true);
+    } catch (error) {
+        console.error('Error restaurando backup seleccionado:', error);
+        setRestoreStatus(
+            `<strong>❌ Error restaurando backup</strong><br>${escaparHtml(error.message)}`,
+            'error'
+        );
+        mostrarNotificacion('❌ Error restaurando backup', true);
+    }
 }
 
 async function verificarDropbox() {
     console.log('🔍 Iniciando verificación de Dropbox...');
-    
+
     const statusElement = document.getElementById('dropboxStatus');
     const configSection = document.getElementById('dropboxConfig');
     const actionsElement = document.getElementById('dropboxActions');
-    
+
     if (!statusElement) {
         console.error('❌ No se encontró el elemento dropboxStatus');
         return;
     }
-    
+
     try {
         statusElement.innerHTML = '<span>🔄 Verificando conexión...</span>';
-        
+
         console.log('📡 Consultando si Dropbox está configurado...');
         const configurado = await window.electronAPI.dropboxEstaConfigurado();
         console.log('📊 Resultado configurado:', configurado);
-        
+
         if (configurado) {
             console.log('✅ Dropbox configurado, verificando conexión...');
-            
-            const timeoutPromise = new Promise((_, reject) => 
+
+            const timeoutPromise = new Promise((_, reject) =>
                 setTimeout(() => reject(new Error('Timeout local')), 8000)
             );
-            
+
             const verifyPromise = window.electronAPI.dropboxVerificar();
-            
+
             const info = await Promise.race([verifyPromise, timeoutPromise]);
             console.log('📊 Resultado verificación:', info);
-            
+
             if (info.success) {
                 console.log('✅ Conexión exitosa:', info.usuario);
                 statusElement.innerHTML = `
@@ -97,36 +375,47 @@ async function verificarDropbox() {
         }
     } catch (error) {
         console.error('❌ Error al verificar Dropbox:', error);
-        
+
         if (error.message === 'Timeout local') {
-            statusElement.innerHTML = `<span class="status-disconnected">❌ Timeout: Verifica tu conexión a internet</span>`;
+            statusElement.innerHTML = '<span class="status-disconnected">❌ Timeout: Verifica tu conexión a internet</span>';
         } else {
             statusElement.innerHTML = `<span class="status-disconnected">❌ Error: ${escaparHtml(error.message)}</span>`;
         }
-        
+
         if (configSection) configSection.style.display = 'block';
         if (actionsElement) actionsElement.style.display = 'none';
     }
-    
+
+    await refrescarChecklistActualizacion();
     console.log('✅ Verificación de Dropbox completada');
 }
 
 async function configurarDropbox() {
-    const token = document.getElementById('dropboxToken').value.trim();
-    
-    if (!token) {
-        mostrarNotificacion('❌ Por favor ingresa el token de Dropbox', true);
-        return;
-    }
+    try {
+        const token = document.getElementById('dropboxToken').value.trim();
 
-    const resultado = await window.electronAPI.dropboxConfigurar(token);
-    
-    if (resultado.success) {
-        mostrarNotificacion(`✅ Dropbox configurado correctamente. Usuario: ${resultado.usuario}`);
-        document.getElementById('dropboxToken').value = '';
-        await verificarDropbox();
-    } else {
-        mostrarNotificacion('❌ Error al configurar Dropbox: ' + resultado.error, true);
+        if (!token) {
+            mostrarNotificacion('❌ Por favor ingresa el token de Dropbox', true);
+            return;
+        }
+
+        const resultado = await window.electronAPI.dropboxConfigurar(token);
+
+        if (resultado.success) {
+            if (resultado.warning) {
+                mostrarNotificacion(`⚠️ ${resultado.warning}`, true);
+            } else {
+                mostrarNotificacion(`✅ Dropbox configurado correctamente. Usuario: ${resultado.usuario}`);
+            }
+            document.getElementById('dropboxToken').value = '';
+            await verificarDropbox();
+            await refrescarChecklistActualizacion();
+        } else {
+            mostrarNotificacion('❌ Error al configurar Dropbox: ' + resultado.error, true);
+        }
+    } catch (error) {
+        console.error('Error configurando Dropbox:', error);
+        mostrarNotificacion('❌ Error inesperado al configurar Dropbox', true);
     }
 }
 
@@ -135,15 +424,16 @@ async function desconectarDropbox() {
         await window.electronAPI.dropboxDesconectar();
         mostrarNotificacion('✅ Dropbox desconectado');
         await verificarDropbox();
+        await refrescarChecklistActualizacion();
     }
 }
 
 async function listarBackupsDropbox() {
     const resultado = await window.electronAPI.dropboxListarBackups();
-    
+
     if (resultado.success) {
         const lista = document.getElementById('dropboxBackupsList');
-        
+
         if (resultado.archivos.length === 0) {
             lista.innerHTML = '<p>No hay backups en Dropbox aún.</p>';
         } else {
@@ -162,11 +452,12 @@ async function listarBackupsDropbox() {
 async function subirBackupDropboxAhora() {
     if (confirm('¿Deseas crear un backup y subirlo a Dropbox inmediatamente?')) {
         mostrarNotificacion('⏳ Creando y subiendo backup...', false);
-        
+
         const resultado = await window.electronAPI.dropboxSubirBackupAhora();
-        
+
         if (resultado.success) {
             mostrarNotificacion('✅ ' + resultado.mensaje);
+            await refrescarChecklistActualizacion();
         } else {
             mostrarNotificacion('❌ Error: ' + resultado.error, true);
         }

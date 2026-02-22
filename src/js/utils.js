@@ -4,6 +4,11 @@
 
 function mostrarNotificacion(mensaje, esError = false) {
     const notif = document.getElementById('notification');
+    if (!notif) {
+        console.warn('No se encontró #notification para mostrar mensaje:', mensaje);
+        return;
+    }
+
     notif.textContent = mensaje;
     notif.className = 'notification' + (esError ? ' error' : '');
     notif.style.display = 'block';
@@ -38,19 +43,77 @@ function showTab(tabName) {
         actualizarInventario();
     } else if (tabName === 'backup') {
         verificarDropbox();
+        if (typeof refrescarChecklistActualizacion === 'function') {
+            refrescarChecklistActualizacion();
+        }
     }
+}
+
+function construirFechaSegura(anio, mes, dia, hora = 0, minuto = 0, segundo = 0) {
+    const fecha = new Date(anio, mes - 1, dia, hora, minuto, segundo);
+    if (Number.isNaN(fecha.getTime())) return null;
+    if (fecha.getFullYear() !== anio || fecha.getMonth() !== mes - 1 || fecha.getDate() !== dia) {
+        return null;
+    }
+    return fecha;
+}
+
+function parseFechaIngreso(fechaIngreso) {
+    if (!fechaIngreso) return null;
+
+    if (fechaIngreso instanceof Date) {
+        return Number.isNaN(fechaIngreso.getTime()) ? null : new Date(fechaIngreso.getTime());
+    }
+
+    if (typeof fechaIngreso === 'number') {
+        const fecha = new Date(fechaIngreso);
+        return Number.isNaN(fecha.getTime()) ? null : fecha;
+    }
+
+    // Formatos históricos esperados:
+    // - dd/mm/yyyy, hh:mm:ss
+    // - dd-mm-yyyy hh:mm:ss
+    // - dd.mm.yyyy
+    if (typeof fechaIngreso === 'string') {
+        const texto = fechaIngreso.trim();
+        if (!texto) return null;
+
+        const matchFechaLocal = texto.match(
+            /^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})(?:[,\s]+(\d{1,2})(?::(\d{1,2}))?(?::(\d{1,2}))?)?$/
+        );
+
+        if (matchFechaLocal) {
+            const dia = parseInt(matchFechaLocal[1], 10);
+            const mes = parseInt(matchFechaLocal[2], 10);
+            let anio = parseInt(matchFechaLocal[3], 10);
+            const hora = parseInt(matchFechaLocal[4] || '0', 10);
+            const minuto = parseInt(matchFechaLocal[5] || '0', 10);
+            const segundo = parseInt(matchFechaLocal[6] || '0', 10);
+
+            if (anio < 100) {
+                anio += 2000;
+            }
+
+            const fechaLocal = construirFechaSegura(anio, mes, dia, hora, minuto, segundo);
+            if (fechaLocal) {
+                return fechaLocal;
+            }
+        }
+
+        // Formatos ISO y otros parseables nativamente.
+        const fechaISO = new Date(texto);
+        if (!Number.isNaN(fechaISO.getTime())) {
+            return fechaISO;
+        }
+    }
+
+    return null;
 }
 
 function calcularDiasEnBodega(fechaIngreso) {
     try {
-        // Asumimos formato dd/mm/yyyy hh:mm:ss o dd/mm/yyyy
-        const fechaParte = fechaIngreso.split(',')[0].trim(); // Obtener solo la parte de la fecha
-        const [dia, mes, anio] = fechaParte.split('/').map(num => parseInt(num, 10));
-
-        // Validar que sean números válidos
-        if (!dia || !mes || !anio) return 'Fecha inválida';
-        // Mes en JS es 0-11
-        const fecha = new Date(anio, mes - 1, dia);
+        const fecha = parseFechaIngreso(fechaIngreso);
+        if (!fecha) return 'Fecha inválida';
 
         const ahora = new Date();
         // Resetear horas para comparar solo días
@@ -74,8 +137,8 @@ function calcularDiasEnBodega(fechaIngreso) {
 
 function obtenerClaseAlerta(fechaIngreso) {
     try {
-        const partes = fechaIngreso.split(',')[0].trim().split('/');
-        const fecha = new Date(partes[2], partes[1] - 1, partes[0]);
+        const fecha = parseFechaIngreso(fechaIngreso);
+        if (!fecha) return '';
 
         const ahora = new Date();
         const dias = Math.floor((ahora - fecha) / (1000 * 60 * 60 * 24));

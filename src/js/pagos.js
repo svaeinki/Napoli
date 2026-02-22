@@ -10,8 +10,18 @@ async function mostrarModalPago(id) {
     const modal = document.getElementById('modalPago');
     const modalTitle = document.getElementById('modalPagoTitle');
     const pagoInfo = document.getElementById('pagoInfoModal');
+    if (!modal || !modalTitle || !pagoInfo) {
+        throw new Error('Modal de pagos no está disponible en el DOM');
+    }
     
-    modalTitle.textContent = `Pagos - ${articulo.numeroBodega} - ${articulo.nombreCliente}`;
+    const numeroBodega = (typeof articulo.numeroBodega === 'string' && articulo.numeroBodega.trim())
+        ? articulo.numeroBodega
+        : 'Sin ubicación';
+    const estadoPago = (typeof articulo.estadoPago === 'string' && articulo.estadoPago.trim())
+        ? articulo.estadoPago
+        : 'Sin pago';
+    const estadoPagoClase = estadoPago.toLowerCase().replace(/\s+/g, '');
+    modalTitle.textContent = `Pagos - ${numeroBodega} - ${articulo.nombreCliente}`;
     
     // Mostrar información de pago
     const claseEstado = articulo.saldoPendiente > 0 ? 'warning' : '';
@@ -32,7 +42,7 @@ async function mostrarModalPago(id) {
                 </div>
             </div>
             <div style="text-align: center; margin-top: 15px;">
-                <span class="estado-pago-badge estado-pago-${articulo.estadoPago.toLowerCase().replace(' ', '')}">${escaparHtml(articulo.estadoPago)}</span>
+                <span class="estado-pago-badge estado-pago-${estadoPagoClase}">${escaparHtml(estadoPago)}</span>
             </div>
         </div>
     `;
@@ -40,6 +50,9 @@ async function mostrarModalPago(id) {
     // Cargar historial de abonos
     const abonos = await window.electronAPI.pagoObtenerAbonos(id);
     const abonosList = document.getElementById('abonosList');
+    if (!abonosList) {
+        throw new Error('No se encontró el contenedor de historial de abonos');
+    }
     
     if (abonos.length === 0) {
         abonosList.innerHTML = '<p style="text-align: center; color: #999; padding: 20px;">No hay abonos registrados</p>';
@@ -70,57 +83,75 @@ async function mostrarModalPago(id) {
 }
 
 async function registrarNuevoAbono() {
-    const modal = document.getElementById('modalPago');
-    const articuloId = parseInt(modal.dataset.articuloId);
-    
-    const monto = obtenerValorNumerico(document.getElementById('montoAbono'));
-    const metodoPago = document.getElementById('metodoPago').value;
-    const observaciones = document.getElementById('observacionesAbono').value.trim();
+    try {
+        const modal = document.getElementById('modalPago');
+        const articuloId = parseInt(modal.dataset.articuloId, 10);
+        const monto = obtenerValorNumerico(document.getElementById('montoAbono'));
+        const metodoPago = document.getElementById('metodoPago').value;
+        const observaciones = document.getElementById('observacionesAbono').value.trim();
 
-    if (!monto || monto <= 0) {
-        mostrarNotificacion('❌ Ingrese un monto válido', true);
-        return;
-    }
+        if (!Number.isInteger(articuloId) || articuloId <= 0) {
+            mostrarNotificacion('❌ No se encontró el artículo para registrar el abono', true);
+            return;
+        }
 
-    const resultado = await window.electronAPI.pagoRegistrarAbono(articuloId, monto, metodoPago, observaciones);
+        if (!monto || monto <= 0) {
+            mostrarNotificacion('❌ Ingrese un monto válido', true);
+            return;
+        }
 
-    if (resultado.success) {
-        mostrarNotificacion('✅ Abono registrado correctamente');
-        document.getElementById('montoAbono').value = '';
-        document.getElementById('observacionesAbono').value = '';
-        
-        // Recargar modal
-        await mostrarModalPago(articuloId);
-        await actualizarInventario();
-    } else {
-        mostrarNotificacion('❌ Error al registrar abono: ' + resultado.error, true);
-    }
-}
-
-async function actualizarValorServicio() {
-    const modal = document.getElementById('modalPago');
-    const articuloId = parseInt(modal.dataset.articuloId);
-    
-    const nuevoValor = obtenerValorNumerico(document.getElementById('nuevoValorTotal'));
-
-    if (!nuevoValor || nuevoValor < 0) {
-        mostrarNotificacion('❌ Ingrese un valor válido', true);
-        return;
-    }
-
-    if (confirm(`¿Está seguro de actualizar el valor total a $${formatearMoneda(nuevoValor)}?`)) {
-        const resultado = await window.electronAPI.pagoActualizarValor(articuloId, nuevoValor);
+        const resultado = await window.electronAPI.pagoRegistrarAbono(articuloId, monto, metodoPago, observaciones);
 
         if (resultado.success) {
-            mostrarNotificacion('✅ Valor actualizado correctamente');
-            document.getElementById('nuevoValorTotal').value = '';
-            
+            mostrarNotificacion('✅ Abono registrado correctamente');
+            document.getElementById('montoAbono').value = '';
+            document.getElementById('observacionesAbono').value = '';
+
             // Recargar modal
             await mostrarModalPago(articuloId);
             await actualizarInventario();
         } else {
-            mostrarNotificacion('❌ Error al actualizar valor: ' + resultado.error, true);
+            mostrarNotificacion('❌ Error al registrar abono: ' + resultado.error, true);
         }
+    } catch (error) {
+        console.error('Error registrando abono:', error);
+        mostrarNotificacion('❌ Error al registrar abono', true);
+    }
+}
+
+async function actualizarValorServicio() {
+    try {
+        const modal = document.getElementById('modalPago');
+        const articuloId = parseInt(modal.dataset.articuloId, 10);
+        const nuevoValor = obtenerValorNumerico(document.getElementById('nuevoValorTotal'));
+
+        if (!Number.isInteger(articuloId) || articuloId <= 0) {
+            mostrarNotificacion('❌ No se encontró el artículo para actualizar el valor', true);
+            return;
+        }
+
+        if (nuevoValor < 0) {
+            mostrarNotificacion('❌ Ingrese un valor válido', true);
+            return;
+        }
+
+        if (confirm(`¿Está seguro de actualizar el valor total a $${formatearMoneda(nuevoValor)}?`)) {
+            const resultado = await window.electronAPI.pagoActualizarValor(articuloId, nuevoValor);
+
+            if (resultado.success) {
+                mostrarNotificacion('✅ Valor actualizado correctamente');
+                document.getElementById('nuevoValorTotal').value = '';
+
+                // Recargar modal
+                await mostrarModalPago(articuloId);
+                await actualizarInventario();
+            } else {
+                mostrarNotificacion('❌ Error al actualizar valor: ' + resultado.error, true);
+            }
+        }
+    } catch (error) {
+        console.error('Error actualizando valor del servicio:', error);
+        mostrarNotificacion('❌ Error al actualizar valor', true);
     }
 }
 

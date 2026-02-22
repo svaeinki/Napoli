@@ -52,6 +52,42 @@
     </div>
 </div>
 
+<!-- CHECKLIST PRE-ACTUALIZACIÓN -->
+<div class="backup-section" style="margin-top: 20px;">
+    <h3>🛡️ Checklist Antes de Actualizar</h3>
+    <p style="margin-bottom: 15px; color: #666;">
+        Antes de instalar una nueva versión, verifica estos puntos para minimizar riesgo de pérdida de datos.
+    </p>
+    <ul class="upgrade-checklist">
+        <li id="checkBackupLocal" class="checklist-item pending">⏳ Backup local .db validado</li>
+        <li id="checkDropboxRecomendado" class="checklist-item pending">ℹ️ Dropbox conectado (recomendado)</li>
+    </ul>
+    <p id="checklistResumen" class="checklist-summary">Checklist pendiente de verificación.</p>
+    <div class="backup-buttons">
+        <button class="btn btn-info" onclick="refrescarChecklistActualizacion()">🔄 Actualizar Checklist</button>
+    </div>
+</div>
+
+<!-- RESTAURACIÓN -->
+<div class="backup-section" style="margin-top: 20px;">
+    <h3>♻️ Restaurar Backup DB</h3>
+    <p style="margin-bottom: 15px; color: #666;">
+        Use esta opción para recuperar una instalación nueva desde un backup SQLite (.db).
+    </p>
+    <div class="input-group">
+        <input type="text" id="restoreBackupPath" placeholder="Seleccione un backup .db" readonly>
+        <button class="btn btn-info" onclick="seleccionarBackupParaRestore()">📂 Seleccionar Backup</button>
+    </div>
+    <div class="backup-buttons" style="margin-top: 10px;">
+        <button class="btn btn-warning" onclick="validarBackupSeleccionado()">🧪 Validar Backup</button>
+        <button class="btn btn-danger" onclick="restaurarBackupSeleccionado()">♻️ Restaurar Backup</button>
+    </div>
+    <div id="restoreStatusBox" class="restore-status" style="display: none;"></div>
+    <small style="display: block; margin-top: 10px; color: #666;">
+        El restore crea un snapshot automático previo y aplica rollback si detecta error.
+    </small>
+</div>
+
 <!-- EXPORTACIÓN -->
 <div class="backup-section" style="margin-top: 20px;">
     <h3>📊 Exportar Datos</h3>
@@ -75,5 +111,7 @@
         <li>✅ Si Dropbox está configurado, se suben automáticamente</li>
         <li>✅ Los backups en Dropbox nunca se eliminan automáticamente</li>
         <li>✅ Puedes subir backups manualmente a Dropbox cuando quieras</li>
+        <li>✅ La restauración oficial se realiza solo desde backups .db validados</li>
+        <li>⚠️ JSON/CSV/Excel son exportaciones de datos, no restauración completa de la app</li>
     </ul>
 </div>

@@ -49,6 +49,8 @@ Sistema profesional de gestión de bodega para reparadora de calzado con base de
 - ✅ Formatos: .db (SQLite) y .json
 - ✅ Integración con Dropbox (opcional)
 - ✅ Sincronización automática en la nube
+- ✅ Validación explícita de backups `.db` antes de restaurar
+- ✅ Restauración guiada con rollback automático y smoke check post-restore
 
 ### 🌙 Tema Oscuro
 - ✅ Toggle para cambiar entre tema claro y oscuro
@@ -178,6 +180,30 @@ La base de datos SQLite se crea **automáticamente** al primer arranque de la ap
 - **Windows:** `%APPDATA%\Napoli Reparadora\napoli.db`
 
 Para resetear la base de datos: cierra la app y elimina el archivo `.db`. Se recreará vacía en el próximo arranque.
+
+---
+
+## 🔄 Actualizar sin perder datos (recomendado)
+
+### Método recomendado
+1. En la app actual, ve a **💾 Backups**.
+2. Crea un **📦 Crear Backup DB**.
+3. Usa **🧪 Validar Backup** sobre ese `.db`.
+4. (Opcional recomendado) confirma que Dropbox esté conectado.
+5. Instala la nueva versión **encima de la actual**.
+
+### Recuperación en instalación limpia
+1. Instala la app nueva.
+2. Abre **💾 Backups**.
+3. Usa **📂 Seleccionar Backup** y elige un `.db`.
+4. Ejecuta **🧪 Validar Backup**.
+5. Ejecuta **♻️ Restaurar Backup**.
+
+> La restauración crea un snapshot previo (`napoli_pre_restore_*.db`) y aplica rollback automático si algo falla.
+
+### Importante
+- El formato oficial de recuperación completa es **backup `.db`**.
+- **JSON / CSV / Excel** sirven para exportar datos, pero **no** reemplazan una restauración completa de la app.
 
 ---
 

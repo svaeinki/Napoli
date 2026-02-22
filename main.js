@@ -1,7 +1,8 @@
-const { app, BrowserWindow, ipcMain, shell, safeStorage } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, safeStorage, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const QRCode = require('qrcode');
+const BetterSqlite = require('better-sqlite3');
 const DatabaseManager = require('./src/database');
 const DropboxManager = require('./src/dropbox');
 
@@ -13,10 +14,361 @@ const USER_DATA_PATH = app.getPath('userData');
 const DB_PATH = path.join(USER_DATA_PATH, 'napoli.db');
 const CONFIG_PATH = path.join(USER_DATA_PATH, 'config.json');
 const BACKUPS_PATH = path.join(USER_DATA_PATH, 'backups');
+const BACKUP_STATUS_PATH = path.join(USER_DATA_PATH, 'backup-status.json');
+const BACKUP_CLOSE_TIMEOUT_MS = 15000;
+const DROPBOX_UPLOAD_TIMEOUT_MS = 12000;
+const REQUIRED_BACKUP_TABLES = ['articulos', 'abonos', 'auditoria'];
+const WARNING_TOKEN_NO_CIFRADO = 'Tu sistema no permite cifrado local del token de Dropbox; se guardará sin cifrar en este equipo.';
+let restauracionEnCurso = false;
 
 // Crear carpeta de backups si no existe
 if (!fs.existsSync(BACKUPS_PATH)) {
     fs.mkdirSync(BACKUPS_PATH, { recursive: true });
+}
+
+function timestampIsoSeguro() {
+    return new Date().toISOString().replace(/:/g, '-').split('.')[0];
+}
+
+function cargarEstadoBackups() {
+    try {
+        if (fs.existsSync(BACKUP_STATUS_PATH)) {
+            return JSON.parse(fs.readFileSync(BACKUP_STATUS_PATH, 'utf8'));
+        }
+    } catch (error) {
+        console.error('Error cargando estado de backups:', error);
+    }
+    return {};
+}
+
+function guardarEstadoBackups(estado) {
+    try {
+        fs.writeFileSync(BACKUP_STATUS_PATH, JSON.stringify(estado, null, 2));
+    } catch (error) {
+        console.error('Error guardando estado de backups:', error);
+    }
+}
+
+function registrarEstadoBackups(parcial) {
+    const actual = cargarEstadoBackups();
+    const actualizado = {
+        ...actual,
+        ...parcial,
+        updatedAt: new Date().toISOString()
+    };
+    guardarEstadoBackups(actualizado);
+    return actualizado;
+}
+
+function listarBackupsLocalesDB() {
+    try {
+        if (!fs.existsSync(BACKUPS_PATH)) {
+            return [];
+        }
+
+        const archivos = fs.readdirSync(BACKUPS_PATH)
+            .filter((archivo) => path.extname(archivo).toLowerCase() === '.db')
+            .map((archivo) => {
+                const ruta = path.join(BACKUPS_PATH, archivo);
+                const stat = fs.statSync(ruta);
+                return {
+                    name: archivo,
+                    path: ruta,
+                    modifiedAt: stat.mtime.toISOString(),
+                    size: stat.size
+                };
+            })
+            .sort((a, b) => new Date(b.modifiedAt) - new Date(a.modifiedAt));
+
+        return archivos;
+    } catch (error) {
+        console.error('Error listando backups locales:', error);
+        return [];
+    }
+}
+
+function obtenerUltimoBackupLocal() {
+    const backups = listarBackupsLocalesDB().filter((backup) =>
+        backup.name.startsWith('napoli_backup_') || backup.name.startsWith('napoli_manual_')
+    );
+    return backups[0] || null;
+}
+
+function validarBackupDBInterno(rutaArchivo) {
+    const resultado = {
+        success: true,
+        valid: false,
+        path: null,
+        integrity: null,
+        tablesOk: false,
+        requiredTables: {},
+        error: null
+    };
+
+    try {
+        const ruta = typeof rutaArchivo === 'string' ? rutaArchivo.trim() : '';
+        if (!ruta) {
+            resultado.error = 'Ruta de backup inválida';
+            return resultado;
+        }
+
+        const rutaAbsoluta = path.resolve(ruta);
+        resultado.path = rutaAbsoluta;
+
+        if (path.extname(rutaAbsoluta).toLowerCase() !== '.db') {
+            resultado.error = 'El archivo debe tener extensión .db';
+            return resultado;
+        }
+
+        if (!fs.existsSync(rutaAbsoluta)) {
+            resultado.error = 'El archivo de backup no existe';
+            return resultado;
+        }
+
+        const stat = fs.statSync(rutaAbsoluta);
+        if (!stat.isFile()) {
+            resultado.error = 'La ruta seleccionada no es un archivo';
+            return resultado;
+        }
+
+        let dbTemporal;
+        try {
+            dbTemporal = new BetterSqlite(rutaAbsoluta, { readonly: true, fileMustExist: true });
+
+            const integrityRows = dbTemporal.prepare('PRAGMA integrity_check').all();
+            const integrityMessages = integrityRows
+                .map((row) => String(row.integrity_check ?? Object.values(row)[0] ?? ''))
+                .filter(Boolean);
+            const integrityOk = integrityMessages.length === 1 && integrityMessages[0].toLowerCase() === 'ok';
+            resultado.integrity = integrityMessages.join(' | ') || 'desconocido';
+
+            const tableRows = dbTemporal.prepare(
+                "SELECT name FROM sqlite_master WHERE type = 'table'"
+            ).all();
+            const tablas = new Set(tableRows.map((row) => row.name));
+
+            const requiredTables = {};
+            for (const tableName of REQUIRED_BACKUP_TABLES) {
+                requiredTables[tableName] = tablas.has(tableName);
+            }
+
+            const tablesOk = REQUIRED_BACKUP_TABLES.every((tableName) => requiredTables[tableName]);
+            resultado.requiredTables = requiredTables;
+            resultado.tablesOk = tablesOk;
+            resultado.valid = integrityOk && tablesOk;
+
+            const errores = [];
+            if (!integrityOk) {
+                errores.push(`integrity_check: ${resultado.integrity}`);
+            }
+            if (!tablesOk) {
+                const faltantes = REQUIRED_BACKUP_TABLES.filter((tableName) => !requiredTables[tableName]);
+                errores.push(`Faltan tablas requeridas: ${faltantes.join(', ')}`);
+            }
+
+            if (errores.length > 0) {
+                resultado.error = errores.join(' | ');
+            }
+        } finally {
+            if (dbTemporal) {
+                dbTemporal.close();
+            }
+        }
+
+        return resultado;
+    } catch (error) {
+        return {
+            ...resultado,
+            success: false,
+            error: error.message
+        };
+    }
+}
+
+function ejecutarSmokeCheckDB(rutaDb) {
+    let dbTemporal;
+    try {
+        dbTemporal = new BetterSqlite(rutaDb, { readonly: true, fileMustExist: true });
+
+        const integrityRow = dbTemporal.prepare('PRAGMA integrity_check').get();
+        const integrityValue = String(integrityRow?.integrity_check ?? Object.values(integrityRow || {})[0] ?? '');
+        if (integrityValue.toLowerCase() !== 'ok') {
+            return { success: false, error: `integrity_check post-restore: ${integrityValue}` };
+        }
+
+        const tableRows = dbTemporal.prepare(
+            "SELECT name FROM sqlite_master WHERE type = 'table'"
+        ).all();
+        const tablas = new Set(tableRows.map((row) => row.name));
+        for (const tableName of REQUIRED_BACKUP_TABLES) {
+            if (!tablas.has(tableName)) {
+                return { success: false, error: `Tabla requerida ausente tras restore: ${tableName}` };
+            }
+        }
+
+        const articulosRow = dbTemporal.prepare('SELECT COUNT(*) AS total FROM articulos').get();
+        const totalArticulos = Number(articulosRow?.total ?? 0);
+
+        // Smoke check adicional: la tabla de abonos debe poder consultarse sin error.
+        dbTemporal.prepare('SELECT COUNT(*) AS total FROM abonos').get();
+
+        return { success: true, totalArticulos };
+    } catch (error) {
+        return { success: false, error: error.message };
+    } finally {
+        if (dbTemporal) {
+            dbTemporal.close();
+        }
+    }
+}
+
+function construirLogValidacion(resultadoValidacion, source = 'manual') {
+    return {
+        timestamp: new Date().toISOString(),
+        source,
+        path: resultadoValidacion.path || null,
+        valid: !!resultadoValidacion.valid,
+        integrity: resultadoValidacion.integrity || null,
+        tablesOk: !!resultadoValidacion.tablesOk,
+        requiredTables: resultadoValidacion.requiredTables || {},
+        error: resultadoValidacion.error || null
+    };
+}
+
+async function restaurarBackupDB(rutaBackup) {
+    if (restauracionEnCurso) {
+        return { success: false, restoredPath: null, rollbackUsed: false, error: 'Ya hay una restauración en curso' };
+    }
+
+    restauracionEnCurso = true;
+    const timestamp = timestampIsoSeguro();
+    const snapshotPath = path.join(BACKUPS_PATH, `napoli_pre_restore_${timestamp}.db`);
+    let rollbackUsed = false;
+    let warning = null;
+    let restoredPath = null;
+
+    try {
+        const validacion = validarBackupDBInterno(rutaBackup);
+        registrarEstadoBackups({ lastValidation: construirLogValidacion(validacion, 'restore_precheck') });
+
+        if (!validacion.success || !validacion.valid) {
+            return {
+                success: false,
+                restoredPath: null,
+                rollbackUsed: false,
+                error: validacion.error || 'El backup seleccionado no es válido'
+            };
+        }
+
+        restoredPath = validacion.path;
+        const dbPathNormalizado = path.resolve(DB_PATH);
+        if (restoredPath === dbPathNormalizado) {
+            return {
+                success: false,
+                restoredPath,
+                rollbackUsed: false,
+                error: 'El archivo seleccionado corresponde a la base de datos activa. Seleccione un backup externo.'
+            };
+        }
+
+        if (!db) {
+            throw new Error('Base de datos no inicializada');
+        }
+
+        const snapshotResult = await db.crearBackup(snapshotPath);
+        if (!snapshotResult.success) {
+            throw new Error(`No se pudo crear snapshot previo: ${snapshotResult.error}`);
+        }
+
+        db.cerrar();
+        db = null;
+
+        fs.copyFileSync(restoredPath, DB_PATH);
+
+        db = new DatabaseManager(DB_PATH);
+
+        const smokeCheck = ejecutarSmokeCheckDB(DB_PATH);
+        if (!smokeCheck.success) {
+            throw new Error(smokeCheck.error || 'Falló validación post-restore');
+        }
+
+        registrarEstadoBackups({
+            lastRestore: {
+                timestamp: new Date().toISOString(),
+                sourcePath: restoredPath,
+                snapshotPath,
+                success: true,
+                rollbackUsed: false,
+                warning: null,
+                error: null,
+                totalArticulos: smokeCheck.totalArticulos
+            }
+        });
+
+        return { success: true, restoredPath, rollbackUsed: false, warning: null };
+    } catch (error) {
+        try {
+            if (db) {
+                db.cerrar();
+                db = null;
+            }
+        } catch (closeError) {
+            console.error('Error cerrando DB tras fallo de restore:', closeError);
+        }
+
+        if (fs.existsSync(snapshotPath)) {
+            try {
+                fs.copyFileSync(snapshotPath, DB_PATH);
+                rollbackUsed = true;
+            } catch (rollbackError) {
+                warning = `No se pudo restaurar snapshot automático: ${rollbackError.message}`;
+            }
+        } else {
+            warning = 'No se encontró snapshot para rollback automático';
+        }
+
+        try {
+            db = new DatabaseManager(DB_PATH);
+        } catch (reopenError) {
+            const reopenMessage = `No se pudo reabrir la base tras el fallo: ${reopenError.message}`;
+            warning = warning ? `${warning} | ${reopenMessage}` : reopenMessage;
+        }
+
+        registrarEstadoBackups({
+            lastRestore: {
+                timestamp: new Date().toISOString(),
+                sourcePath: restoredPath,
+                snapshotPath,
+                success: false,
+                rollbackUsed,
+                warning,
+                error: error.message
+            }
+        });
+
+        return {
+            success: false,
+            restoredPath,
+            rollbackUsed,
+            warning,
+            error: error.message
+        };
+    } finally {
+        restauracionEnCurso = false;
+    }
+}
+
+function obtenerEstadoBackups() {
+    const estado = cargarEstadoBackups();
+    return {
+        success: true,
+        backupDir: BACKUPS_PATH,
+        lastLocalBackup: obtenerUltimoBackupLocal(),
+        localBackups: listarBackupsLocalesDB().slice(0, 20),
+        lastValidation: estado.lastValidation || null,
+        lastRestore: estado.lastRestore || null,
+        dropboxConfigured: !!(dropboxManager && dropboxManager.estaConfigurado())
+    };
 }
 
 // Cargar configuración (incluye token de Dropbox)
@@ -72,6 +424,25 @@ function sanitizarConfigImpresora(printerConfig = {}) {
     return { width, header, footer };
 }
 
+function withTimeout(promise, timeoutMs, timeoutMessage) {
+    let timeoutId;
+    const timeoutPromise = new Promise((_, reject) => {
+        timeoutId = setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs);
+    });
+
+    return Promise.race([promise, timeoutPromise]).finally(() => {
+        clearTimeout(timeoutId);
+    });
+}
+
+async function subirBackupDBConTimeout(backupPath) {
+    return await withTimeout(
+        dropboxManager.subirBackupDB(backupPath),
+        DROPBOX_UPLOAD_TIMEOUT_MS,
+        'Timeout subiendo backup a Dropbox'
+    );
+}
+
 function createWindow() {
     mainWindow = new BrowserWindow({
         width: 1400,
@@ -97,13 +468,22 @@ function createWindow() {
 
 app.whenReady().then(() => {
     // Inicializar base de datos
-    db = new DatabaseManager(DB_PATH);
+    try {
+        db = new DatabaseManager(DB_PATH);
+    } catch (error) {
+        console.error('❌ Error crítico inicializando base de datos:', error);
+        app.quit();
+        return;
+    }
 
     // Inicializar Dropbox si está configurado
     const config = cargarConfiguracion();
     if (config.dropboxToken) {
         const token = descifrarToken(config.dropboxToken);
         if (token) {
+            if (!safeStorage.isEncryptionAvailable()) {
+                console.warn(`⚠️ ${WARNING_TOKEN_NO_CIFRADO}`);
+            }
             dropboxManager = new DropboxManager(token);
         }
     }
@@ -142,7 +522,11 @@ app.on('before-quit', (event) => {
         event.preventDefault();
         backupAlCerrarRealizado = true;
 
-        crearBackupAutomatico()
+        withTimeout(
+            crearBackupAutomatico(),
+            BACKUP_CLOSE_TIMEOUT_MS,
+            'Timeout creando backup al cerrar'
+        )
             .catch((error) => {
                 console.error('Error creando backup al cerrar:', error);
             })
@@ -226,12 +610,54 @@ ipcMain.handle('backup:exportarExcel', async () => {
 });
 
 ipcMain.handle('backup:abrirCarpeta', async () => {
-    shell.openPath(BACKUPS_PATH);
+    const resultado = await shell.openPath(BACKUPS_PATH);
+    if (resultado) {
+        return { success: false, error: resultado };
+    }
+    return { success: true };
+});
+
+ipcMain.handle('backup:seleccionarArchivoDB', async () => {
+    try {
+        const targetWindow = mainWindow && !mainWindow.isDestroyed() ? mainWindow : undefined;
+        const result = await dialog.showOpenDialog(targetWindow, {
+            title: 'Seleccionar backup de base de datos',
+            defaultPath: BACKUPS_PATH,
+            properties: ['openFile'],
+            filters: [{ name: 'Base de datos SQLite', extensions: ['db'] }]
+        });
+
+        if (result.canceled || !result.filePaths || result.filePaths.length === 0) {
+            return { success: true, canceled: true };
+        }
+
+        return { success: true, canceled: false, path: result.filePaths[0] };
+    } catch (error) {
+        return { success: false, canceled: true, error: error.message };
+    }
+});
+
+ipcMain.handle('backup:validarDB', async (event, rutaArchivo) => {
+    const resultado = validarBackupDBInterno(rutaArchivo);
+    registrarEstadoBackups({ lastValidation: construirLogValidacion(resultado, 'manual') });
+    return resultado;
+});
+
+ipcMain.handle('backup:restaurarDB', async (event, rutaBackup) => {
+    return await restaurarBackupDB(rutaBackup);
+});
+
+ipcMain.handle('backup:estado', async () => {
+    return obtenerEstadoBackups();
 });
 
 async function crearBackupAutomatico() {
     try {
-        const timestamp = new Date().toISOString().replace(/:/g, '-').split('.')[0];
+        if (restauracionEnCurso) {
+            return { success: false, error: 'Restauración en curso. Intente nuevamente al terminar.' };
+        }
+
+        const timestamp = timestampIsoSeguro();
         const backupPath = path.join(BACKUPS_PATH, `napoli_backup_${timestamp}.db`);
 
         if (!db) {
@@ -247,7 +673,7 @@ async function crearBackupAutomatico() {
 
         // Subir a Dropbox si está configurado
         if (dropboxManager && dropboxManager.estaConfigurado()) {
-            const subida = await dropboxManager.subirBackupDB(backupPath);
+            const subida = await subirBackupDBConTimeout(backupPath);
             if (!subida.success) {
                 console.warn('⚠️ Backup automático local creado, pero falló subida a Dropbox:', subida.error);
             }
@@ -255,6 +681,13 @@ async function crearBackupAutomatico() {
 
         // Limpiar backups antiguos (mantener últimos 30 días)
         limpiarBackupsAntiguos();
+
+        registrarEstadoBackups({
+            lastAutomaticBackup: {
+                timestamp: new Date().toISOString(),
+                path: backupPath
+            }
+        });
 
         return { success: true, path: backupPath };
     } catch (error) {
@@ -267,7 +700,11 @@ async function crearBackupManual(options = {}) {
     const { exigirDropbox = false } = options;
 
     try {
-        const timestamp = new Date().toISOString().replace(/:/g, '-').split('.')[0];
+        if (restauracionEnCurso) {
+            return { success: false, error: 'Restauración en curso. Intente nuevamente al terminar.' };
+        }
+
+        const timestamp = timestampIsoSeguro();
         const backupPath = path.join(BACKUPS_PATH, `napoli_manual_${timestamp}.db`);
 
         if (!db) {
@@ -283,7 +720,7 @@ async function crearBackupManual(options = {}) {
 
         // Subir a Dropbox si está configurado
         if (dropboxManager && dropboxManager.estaConfigurado()) {
-            const subida = await dropboxManager.subirBackupDB(backupPath);
+            const subida = await subirBackupDBConTimeout(backupPath);
             if (!subida.success) {
                 const mensaje = `Backup local creado, pero falló subida a Dropbox: ${subida.error}`;
                 if (exigirDropbox) {
@@ -292,6 +729,13 @@ async function crearBackupManual(options = {}) {
                 return { success: true, path: backupPath, warning: mensaje };
             }
         }
+
+        registrarEstadoBackups({
+            lastManualBackup: {
+                timestamp: new Date().toISOString(),
+                path: backupPath
+            }
+        });
 
         return { success: true, path: backupPath };
     } catch (error) {
@@ -302,7 +746,15 @@ async function crearBackupManual(options = {}) {
 
 function exportarJSON() {
     try {
-        const timestamp = new Date().toISOString().replace(/:/g, '-').split('.')[0];
+        if (restauracionEnCurso) {
+            throw new Error('Restauración en curso. Intente nuevamente al terminar.');
+        }
+
+        if (!db) {
+            throw new Error('Base de datos no inicializada');
+        }
+
+        const timestamp = timestampIsoSeguro();
         const jsonPath = path.join(BACKUPS_PATH, `napoli_export_${timestamp}.json`);
 
         const datos = db.obtenerTodos();
@@ -326,8 +778,16 @@ function exportarJSON() {
 
 async function exportarExcel() {
     try {
+        if (restauracionEnCurso) {
+            throw new Error('Restauración en curso. Intente nuevamente al terminar.');
+        }
+
+        if (!db) {
+            throw new Error('Base de datos no inicializada');
+        }
+
         const ExcelJS = require('exceljs');
-        const timestamp = new Date().toISOString().replace(/:/g, '-').split('.')[0];
+        const timestamp = timestampIsoSeguro();
         const excelPath = path.join(BACKUPS_PATH, `napoli_inventario_${timestamp}.xlsx`);
 
         const workbook = new ExcelJS.Workbook();
@@ -341,7 +801,7 @@ async function exportarExcel() {
             { header: 'Teléfono', key: 'telefono', width: 15 },
             { header: 'Tipo Servicio', key: 'tipoArticulo', width: 20 },
             { header: 'Descripción', key: 'descripcion', width: 40 },
-            { header: 'N° Bodega', key: 'numeroBodega', width: 12 },
+            { header: 'Ubicación (opcional)', key: 'numeroBodega', width: 20 },
             { header: 'Fecha Ingreso', key: 'fechaIngreso', width: 18 },
             { header: 'Estado', key: 'estado', width: 12 },
             { header: 'Fecha Entrega', key: 'fechaEntrega', width: 18 },
@@ -374,7 +834,7 @@ async function exportarExcel() {
                 telefono: articulo.telefono || '',
                 tipoArticulo: articulo.tipoArticulo,
                 descripcion: articulo.descripcion,
-                numeroBodega: articulo.numeroBodega,
+                numeroBodega: articulo.numeroBodega || '',
                 fechaIngreso: articulo.fechaIngreso,
                 estado: articulo.estado,
                 fechaEntrega: articulo.fechaEntrega || '',
@@ -462,7 +922,14 @@ function limpiarBackupsAntiguos() {
             const stats = fs.statSync(archivoPath);
             const edad = ahora - stats.mtime.getTime();
 
-            if (edad > diasMaximos && archivo.startsWith('napoli_backup_')) {
+            if (
+                edad > diasMaximos &&
+                (
+                    archivo.startsWith('napoli_backup_') ||
+                    archivo.startsWith('napoli_manual_') ||
+                    archivo.startsWith('napoli_pre_restore_')
+                )
+            ) {
                 fs.unlinkSync(archivoPath);
                 console.log('🗑️ Backup antiguo eliminado:', archivo);
             }
@@ -478,15 +945,25 @@ function limpiarBackupsAntiguos() {
 
 ipcMain.handle('dropbox:configurar', async (event, token) => {
     try {
-        dropboxManager = new DropboxManager(token);
+        const tokenLimpio = typeof token === 'string' ? token.trim() : '';
+        if (!tokenLimpio) {
+            return { success: false, error: 'Token de Dropbox inválido' };
+        }
+
+        dropboxManager = new DropboxManager(tokenLimpio);
         const verificacion = await dropboxManager.verificarConexion();
 
         if (verificacion.success) {
             const config = cargarConfiguracion();
-            config.dropboxToken = cifrarToken(token);
+            config.dropboxToken = cifrarToken(tokenLimpio);
             guardarConfiguracion(config);
+            const warning = safeStorage.isEncryptionAvailable() ? null : WARNING_TOKEN_NO_CIFRADO;
 
-            return { success: true, usuario: verificacion.usuario };
+            return {
+                success: true,
+                usuario: verificacion.usuario,
+                warning
+            };
         } else {
             dropboxManager = null;
             return { success: false, error: verificacion.error };

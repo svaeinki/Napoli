@@ -27,7 +27,7 @@ class DatabaseManager {
                 telefono TEXT,
                 tipoArticulo TEXT NOT NULL,
                 descripcion TEXT NOT NULL,
-                numeroBodega TEXT NOT NULL UNIQUE,
+                numeroBodega TEXT,
                 observaciones TEXT,
                 estado TEXT DEFAULT 'En Bodega' CHECK(estado IN ('En Bodega', 'Entregado')),
                 fechaIngreso TEXT NOT NULL,
@@ -81,11 +81,102 @@ class DatabaseManager {
 
                 console.log('✅ Migración completada: columnas de pago agregadas');
             }
+
+            // Migrar numeroBodega para que sea opcional (sin NOT NULL/UNIQUE)
+            this.migrarNumeroBodegaOpcional();
         } catch (error) {
             console.error('Error en migración:', error);
+            throw error;
         }
 
         console.log('✅ Tablas inicializadas correctamente');
+    }
+
+    migrarNumeroBodegaOpcional() {
+        const tableInfo = this.db.prepare("PRAGMA table_info(articulos)").all();
+        const columnaBodega = tableInfo.find(col => col.name === 'numeroBodega');
+        const indices = this.db.prepare("PRAGMA index_list('articulos')").all();
+        const tieneIndiceUnicoBodega = indices.some((index) => {
+            if (index.unique !== 1) {
+                return false;
+            }
+            if (!index.name) {
+                return false;
+            }
+
+            const indexName = String(index.name || '').replace(/"/g, '""');
+            const columnasIndice = this.db.prepare(`PRAGMA index_info("${indexName}")`).all();
+            return columnasIndice.some(col => col.name === 'numeroBodega');
+        });
+
+        // Si ya es nullable y sin índice único, no se requiere migración.
+        if (!columnaBodega || (columnaBodega.notnull === 0 && !tieneIndiceUnicoBodega)) {
+            return;
+        }
+
+        console.log('📊 Migrando base de datos: número de bodega ahora es opcional...');
+
+        try {
+            this.db.pragma('foreign_keys = OFF');
+            this.db.exec('BEGIN TRANSACTION');
+
+            this.db.exec(`
+                CREATE TABLE articulos_tmp (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    rut TEXT NOT NULL,
+                    nombreCliente TEXT NOT NULL,
+                    telefono TEXT,
+                    tipoArticulo TEXT NOT NULL,
+                    descripcion TEXT NOT NULL,
+                    numeroBodega TEXT,
+                    observaciones TEXT,
+                    estado TEXT DEFAULT 'En Bodega' CHECK(estado IN ('En Bodega', 'Entregado')),
+                    fechaIngreso TEXT NOT NULL,
+                    fechaEntrega TEXT,
+                    fechaCreacion DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    fechaModificacion DATETIME,
+                    valorTotal REAL DEFAULT 0,
+                    totalAbonado REAL DEFAULT 0,
+                    saldoPendiente REAL DEFAULT 0,
+                    estadoPago TEXT DEFAULT 'Sin pago' CHECK(estadoPago IN ('Sin pago', 'Abonado', 'Pagado'))
+                );
+
+                INSERT INTO articulos_tmp (
+                    id, rut, nombreCliente, telefono, tipoArticulo, descripcion, numeroBodega,
+                    observaciones, estado, fechaIngreso, fechaEntrega, fechaCreacion, fechaModificacion,
+                    valorTotal, totalAbonado, saldoPendiente, estadoPago
+                )
+                SELECT
+                    id, rut, nombreCliente, telefono, tipoArticulo, descripcion, NULLIF(TRIM(numeroBodega), ''),
+                    observaciones, estado, fechaIngreso, fechaEntrega, fechaCreacion, fechaModificacion,
+                    COALESCE(valorTotal, 0), COALESCE(totalAbonado, 0), COALESCE(saldoPendiente, 0), COALESCE(estadoPago, 'Sin pago')
+                FROM articulos;
+
+                DROP TABLE articulos;
+                ALTER TABLE articulos_tmp RENAME TO articulos;
+
+                CREATE INDEX IF NOT EXISTS idx_rut ON articulos(rut);
+                CREATE INDEX IF NOT EXISTS idx_estado ON articulos(estado);
+                CREATE INDEX IF NOT EXISTS idx_numeroBodega ON articulos(numeroBodega);
+                CREATE INDEX IF NOT EXISTS idx_fechaIngreso ON articulos(fechaIngreso);
+            `);
+
+            this.db.exec('COMMIT');
+            console.log('✅ Migración completada: número de bodega opcional');
+        } catch (error) {
+            this.db.exec('ROLLBACK');
+            throw error;
+        } finally {
+            this.db.pragma('foreign_keys = ON');
+        }
+    }
+
+    normalizarNumeroBodega(numeroBodega) {
+        if (typeof numeroBodega !== 'string') {
+            return null;
+        }
+        const valor = numeroBodega.trim().toUpperCase();
+        return valor || null;
     }
 
     prepararStatements() {
@@ -152,7 +243,8 @@ class DatabaseManager {
     insertar(articulo) {
         try {
             const valorTotal = articulo.valorTotal || 0;
-            const estadoPago = valorTotal > 0 ? 'Sin pago' : 'Sin pago';
+            const estadoPago = 'Sin pago';
+            const numeroBodega = this.normalizarNumeroBodega(articulo.numeroBodega);
 
             const result = this.statements.insertarArticulo.run(
                 articulo.rut,
@@ -160,7 +252,7 @@ class DatabaseManager {
                 articulo.telefono || null,
                 articulo.tipoArticulo,
                 articulo.descripcion,
-                articulo.numeroBodega.toUpperCase(),
+                numeroBodega,
                 articulo.observaciones || null,
                 articulo.estado || 'En Bodega',
                 articulo.fechaIngreso,
@@ -172,15 +264,12 @@ class DatabaseManager {
             this.statements.registrarAuditoria.run(
                 result.lastInsertRowid,
                 'INSERTAR',
-                `Artículo creado: ${articulo.numeroBodega} - Valor: $${valorTotal}`
+                `Artículo creado: ${numeroBodega || 'Sin ubicación'} - Valor: $${valorTotal}`
             );
 
             return { success: true, id: result.lastInsertRowid };
         } catch (error) {
             console.error('Error al insertar:', error);
-            if (error.message.includes('UNIQUE')) {
-                return { success: false, error: 'Ya existe un artículo con ese número de bodega' };
-            }
             return { success: false, error: error.message };
         }
     }
@@ -225,7 +314,10 @@ class DatabaseManager {
             const fechaEntrega = nuevoEstado === 'Entregado' ?
                 new Date().toLocaleString('es-CL') : null;
 
-            this.statements.actualizarEstado.run(nuevoEstado, fechaEntrega, id);
+            const result = this.statements.actualizarEstado.run(nuevoEstado, fechaEntrega, id);
+            if (result.changes === 0) {
+                return { success: false, error: 'Artículo no encontrado' };
+            }
 
             this.statements.registrarAuditoria.run(
                 id,
@@ -250,7 +342,7 @@ class DatabaseManager {
             this.statements.registrarAuditoria.run(
                 id,
                 'ELIMINAR',
-                `Artículo eliminado: ${articulo.numeroBodega}`
+                `Artículo eliminado: ${articulo.numeroBodega || 'Sin ubicación'}`
             );
 
             this.statements.eliminar.run(id);
@@ -276,6 +368,28 @@ class DatabaseManager {
 
     registrarAbono(articuloId, monto, metodoPago = 'Efectivo', observaciones = '') {
         try {
+            const articuloIdNum = Number(articuloId);
+            const montoNum = Number(monto);
+
+            if (!Number.isInteger(articuloIdNum) || articuloIdNum <= 0) {
+                return { success: false, error: 'ID de artículo inválido' };
+            }
+            if (!Number.isFinite(montoNum) || montoNum <= 0) {
+                return { success: false, error: 'Monto de abono inválido' };
+            }
+
+            const articulo = this.statements.obtenerPorId.get(articuloIdNum);
+            if (!articulo) {
+                return { success: false, error: 'Artículo no encontrado' };
+            }
+
+            const metodoPagoLimpio = (typeof metodoPago === 'string' && metodoPago.trim())
+                ? metodoPago.trim().slice(0, 80)
+                : 'Efectivo';
+            const observacionesLimpias = (typeof observaciones === 'string')
+                ? observaciones.trim().slice(0, 500)
+                : '';
+
             const insertAbono = this.db.prepare(`
                 INSERT INTO abonos (articuloId, monto, metodoPago, observaciones)
                 VALUES (?, ?, ?, ?)
@@ -296,18 +410,21 @@ class DatabaseManager {
 
             // Ejecutar todo dentro de una transacción
             const registrar = this.db.transaction(() => {
-                insertAbono.run(articuloId, monto, metodoPago, observaciones);
-                actualizarTotales.run(monto, monto, monto, monto, articuloId);
+                insertAbono.run(articuloIdNum, montoNum, metodoPagoLimpio, observacionesLimpias);
+                const result = actualizarTotales.run(montoNum, montoNum, montoNum, montoNum, articuloIdNum);
+                if (result.changes === 0) {
+                    throw new Error('Artículo no encontrado');
+                }
                 this.statements.registrarAuditoria.run(
-                    articuloId,
+                    articuloIdNum,
                     'REGISTRAR_ABONO',
-                    `Abono registrado: $${monto} (${metodoPago})`
+                    `Abono registrado: $${montoNum} (${metodoPagoLimpio})`
                 );
             });
 
             registrar();
 
-            console.log(`✅ Abono registrado: $${monto} para artículo ${articuloId}`);
+            console.log(`✅ Abono registrado: $${montoNum} para artículo ${articuloIdNum}`);
             return { success: true };
         } catch (error) {
             console.error('Error al registrar abono:', error);
@@ -332,6 +449,15 @@ class DatabaseManager {
 
     actualizarValorTotal(articuloId, nuevoValor) {
         try {
+            const articuloIdNum = Number(articuloId);
+            const nuevoValorNum = Number(nuevoValor);
+            if (!Number.isInteger(articuloIdNum) || articuloIdNum <= 0) {
+                return { success: false, error: 'ID de artículo inválido' };
+            }
+            if (!Number.isFinite(nuevoValorNum) || nuevoValorNum < 0) {
+                return { success: false, error: 'Nuevo valor inválido' };
+            }
+
             const actualizar = this.db.prepare(`
                 UPDATE articulos 
                 SET valorTotal = ?,
@@ -345,12 +471,15 @@ class DatabaseManager {
                 WHERE id = ?
             `);
 
-            actualizar.run(nuevoValor, nuevoValor, nuevoValor, articuloId);
+            const result = actualizar.run(nuevoValorNum, nuevoValorNum, nuevoValorNum, articuloIdNum);
+            if (result.changes === 0) {
+                return { success: false, error: 'Artículo no encontrado' };
+            }
 
             this.statements.registrarAuditoria.run(
-                articuloId,
+                articuloIdNum,
                 'ACTUALIZAR_VALOR',
-                `Valor total actualizado a: $${nuevoValor}`
+                `Valor total actualizado a: $${nuevoValorNum}`
             );
 
             return { success: true };
@@ -377,34 +506,65 @@ class DatabaseManager {
     migrarDesdeLocalStorage(articulosJSON) {
         try {
             const articulos = JSON.parse(articulosJSON);
+            if (!Array.isArray(articulos)) {
+                return { success: false, error: 'Formato inválido: se esperaba un arreglo de artículos' };
+            }
+
+            let migrados = 0;
+            let fallidos = 0;
+            const errores = [];
 
             const migrar = this.db.transaction(() => {
                 for (const articulo of articulos) {
                     try {
+                        const rut = typeof articulo.rut === 'string' ? articulo.rut.trim() : '';
+                        const nombreCliente = typeof articulo.nombreCliente === 'string' ? articulo.nombreCliente.trim() : '';
+                        const tipoArticulo = typeof articulo.tipoArticulo === 'string' ? articulo.tipoArticulo.trim() : '';
+                        const descripcion = typeof articulo.descripcion === 'string' ? articulo.descripcion.trim() : '';
+                        const fechaIngreso = (typeof articulo.fechaIngreso === 'string' && articulo.fechaIngreso.trim())
+                            ? articulo.fechaIngreso.trim()
+                            : new Date().toISOString();
+                        const estado = articulo.estado === 'Entregado' ? 'Entregado' : 'En Bodega';
+
+                        if (!rut || !nombreCliente || !tipoArticulo || !descripcion) {
+                            throw new Error('Campos obligatorios incompletos');
+                        }
+
+                        const numeroBodega = this.normalizarNumeroBodega(articulo.numeroBodega);
                         this.statements.insertarArticulo.run(
-                            articulo.rut,
-                            articulo.nombreCliente,
+                            rut,
+                            nombreCliente,
                             articulo.telefono || null,
-                            articulo.tipoArticulo,
-                            articulo.descripcion,
-                            articulo.numeroBodega,
+                            tipoArticulo,
+                            descripcion,
+                            numeroBodega,
                             articulo.observaciones || null,
-                            articulo.estado,
-                            articulo.fechaIngreso,
+                            estado,
+                            fechaIngreso,
                             0, // valorTotal
                             0, // saldoPendiente
                             'Sin pago' // estadoPago
                         );
+                        migrados++;
                     } catch (e) {
-                        console.warn(`Error migrando artículo ${articulo.numeroBodega}:`, e.message);
+                        fallidos++;
+                        const mensaje = `Error migrando artículo ${articulo.numeroBodega || 'Sin ubicación'}: ${e.message}`;
+                        errores.push(mensaje);
+                        console.warn(mensaje);
                     }
                 }
             });
 
             migrar();
 
-            console.log(`✅ Migrados ${articulos.length} artículos desde LocalStorage`);
-            return { success: true, total: articulos.length };
+            console.log(`✅ Migración LocalStorage finalizada. Total: ${articulos.length}, Migrados: ${migrados}, Fallidos: ${fallidos}`);
+            return {
+                success: fallidos === 0,
+                total: articulos.length,
+                migrados,
+                fallidos,
+                errores
+            };
         } catch (error) {
             console.error('❌ Error en migración:', error);
             return { success: false, error: error.message };

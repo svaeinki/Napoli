@@ -23,6 +23,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     exportarJSON: () => ipcRenderer.invoke('backup:exportarJSON'),
     exportarExcel: () => ipcRenderer.invoke('backup:exportarExcel'),
     abrirCarpetaBackups: () => ipcRenderer.invoke('backup:abrirCarpeta'),
+    backupSeleccionarArchivoDB: () => ipcRenderer.invoke('backup:seleccionarArchivoDB'),
+    backupValidarDB: (rutaArchivo) => ipcRenderer.invoke('backup:validarDB', rutaArchivo),
+    backupRestaurarDB: (rutaBackup) => ipcRenderer.invoke('backup:restaurarDB', rutaBackup),
+    backupObtenerEstado: () => ipcRenderer.invoke('backup:estado'),
 
     // Dropbox
     dropboxConfigurar: (token) => ipcRenderer.invoke('dropbox:configurar', token),
