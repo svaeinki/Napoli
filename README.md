@@ -2,7 +2,7 @@
 
 Sistema profesional de gestión de bodega para reparadora de calzado con base de datos SQLite, backups automáticos en Dropbox, sistema completo de pagos y abonos, tickets térmicos y tema oscuro.
 
-![Version](https://img.shields.io/badge/version-2.0.2-blue.svg)
+![Version](https://img.shields.io/badge/version-2.0.3-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)
 
@@ -259,12 +259,19 @@ Si cualquiera falla, la release no debe publicarse.
 
 ## 🔄 Actualizar sin perder datos (recomendado)
 
+> Estrategia actual: actualización **manual** con instalador NSIS nuevo encima de la instalación existente (sin auto-update integrado).
+
 ### Método recomendado
 1. En la app actual, ve a **💾 Backups**.
 2. Crea un **📦 Crear Backup DB**.
 3. Usa **🧪 Validar Backup** sobre ese `.db`.
 4. (Opcional recomendado) confirma que Dropbox esté conectado.
-5. Instala la nueva versión **encima de la actual**.
+5. Cierra completamente la app.
+6. Ejecuta el instalador `.exe` nuevo **encima de la instalación actual**.
+7. Abre la app actualizada y verifica:
+   - Que la versión cambió.
+   - Que los datos siguen intactos.
+8. Si algo falla, usa el flujo de recuperación en instalación limpia descrito abajo.
 
 ### Recuperación en instalación limpia
 1. Instala la app nueva.
@@ -348,6 +355,11 @@ zapateria-bodega/
 ---
 
 ## 📝 Changelog
+
+### v2.0.3 (2026-02-22)
+- 🔄 Flujo formalizado de actualización manual en Windows con instalador NSIS (in-place update).
+- ✅ Guía de actualización reforzada: backup `.db`, cierre de app, instalación encima, verificación post-update y recuperación limpia.
+- 🧾 Versionado y documentación alineados a `2.0.3`.
 
 ### v2.0.2 (2026-02-22)
 - 🖨️ Perfiles tipográficos para tickets 58mm: `compacto`, `legible` y `extra_grande`.
