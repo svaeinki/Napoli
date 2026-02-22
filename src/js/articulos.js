@@ -2,6 +2,19 @@
 // GESTIÓN DE ARTÍCULOS
 // ============================================
 
+async function imprimirTicketConConfigActual() {
+    const width = window.Tickets && window.Tickets.config ? window.Tickets.config.width : '58mm';
+    const resultado = await window.electronAPI.imprimir({ width });
+    if (!resultado || !resultado.success) {
+        const mensaje = resultado && resultado.error
+            ? resultado.error
+            : 'No se pudo enviar el ticket a la impresora';
+        mostrarNotificacion(`❌ Error imprimiendo ticket: ${mensaje}`, true);
+        return false;
+    }
+    return true;
+}
+
 async function ingresarArticulo(e) {
     e.preventDefault();
 
@@ -63,8 +76,8 @@ async function ingresarArticulo(e) {
 
         const ticketGenerado = await generarTicket(articuloCompleto);
         if (ticketGenerado) {
-            setTimeout(() => {
-                window.electronAPI.imprimir();
+            setTimeout(async () => {
+                await imprimirTicketConConfigActual();
             }, 500);
         } else {
             mostrarNotificacion('⚠️ Artículo guardado, pero no se pudo generar el ticket', true);
@@ -177,8 +190,8 @@ async function reimprimirTicket(id) {
     if (articulo) {
         const ticketGenerado = await generarTicket(articulo);
         if (ticketGenerado) {
-            setTimeout(() => {
-                window.electronAPI.imprimir();
+            setTimeout(async () => {
+                await imprimirTicketConConfigActual();
             }, 500); // Pequeño delay para asegurar que el DOM se actualizó
         }
     }
@@ -189,6 +202,6 @@ function cerrarModalTicket() {
     document.getElementById('modalTicketContainer').innerHTML = '';
 }
 
-function imprimirDesdePreview() {
-    window.electronAPI.imprimir();
+async function imprimirDesdePreview() {
+    await imprimirTicketConConfigActual();
 }

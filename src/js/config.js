@@ -1,3 +1,17 @@
+function sanitizarAnchoContenido58(valor, fallback = 48) {
+    const parsed = Number(valor);
+    if (!Number.isFinite(parsed)) return fallback;
+    return Math.min(54, Math.max(44, parsed));
+}
+
+function actualizarPreviewAncho58mm(valor) {
+    const ancho = sanitizarAnchoContenido58(valor);
+    const target = document.getElementById('configTicketContentWidth58Value');
+    if (target) {
+        target.textContent = `${ancho.toFixed(1)} mm`;
+    }
+}
+
 async function abrirConfiguracion() {
     const modal = document.getElementById('modalConfigContainer');
     if (!modal) {
@@ -26,6 +40,7 @@ async function abrirConfiguracion() {
     const defaults = (window.Tickets && window.Tickets.config) ? window.Tickets.config : {
         width: '58mm',
         fontProfile58: 'legible',
+        contentWidth58mm: 48,
         header: 'NAPOLI\nReparadora de Calzado',
         footer: 'Gracias por preferir Napoli\nConserve este ticket'
     };
@@ -41,9 +56,15 @@ async function abrirConfiguracion() {
     const fontProfile58 = perfilesPermitidos.has(printerConfig.fontProfile58)
         ? printerConfig.fontProfile58
         : (defaults.fontProfile58 || 'legible');
+    const contentWidth58mm = sanitizarAnchoContenido58(
+        printerConfig.contentWidth58mm,
+        sanitizarAnchoContenido58(defaults.contentWidth58mm, 48)
+    );
 
     document.getElementById('configPrinterWidth').value = width;
     document.getElementById('configTicketFontProfile58').value = fontProfile58;
+    document.getElementById('configTicketContentWidth58').value = String(contentWidth58mm);
+    actualizarPreviewAncho58mm(contentWidth58mm);
     document.getElementById('configTicketHeader').value = header;
     document.getElementById('configTicketFooter').value = footer;
 
@@ -76,12 +97,16 @@ async function guardarConfiguracionImpresora() {
     try {
         const width = document.getElementById('configPrinterWidth').value;
         const fontProfile58 = document.getElementById('configTicketFontProfile58').value;
+        const contentWidth58mm = sanitizarAnchoContenido58(
+            document.getElementById('configTicketContentWidth58').value
+        );
         const header = document.getElementById('configTicketHeader').value;
         const footer = document.getElementById('configTicketFooter').value;
 
         const nuevaConfig = {
             width,
             fontProfile58,
+            contentWidth58mm,
             header,
             footer
         };
@@ -119,8 +144,18 @@ async function pruebaImpresion() {
 
     const ticketGenerado = await generarTicket(articuloPrueba);
     if (ticketGenerado) {
-        setTimeout(() => {
-            window.electronAPI.imprimir();
+        const widthSelect = document.getElementById('configPrinterWidth');
+        const width = widthSelect && widthSelect.value === '80mm' ? '80mm' : '58mm';
+        setTimeout(async () => {
+            const resultadoImpresion = await window.electronAPI.imprimir({
+                width
+            });
+            if (!resultadoImpresion || !resultadoImpresion.success) {
+                const mensaje = resultadoImpresion && resultadoImpresion.error
+                    ? resultadoImpresion.error
+                    : 'La impresora rechazó el ticket de prueba';
+                mostrarNotificacion(`❌ ${mensaje}`, true);
+            }
         }, 500);
     } else {
         mostrarNotificacion('❌ No se pudo generar el ticket de prueba', true);

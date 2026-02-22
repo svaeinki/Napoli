@@ -531,25 +531,7 @@ tbody tr:hover {
     display: none;
 }
 
-@media print {
-    body * {
-        visibility: hidden;
-    }
-    .ticket, .ticket * {
-        visibility: visible;
-    }
-    .ticket {
-        position: absolute;
-        left: 50%;
-        top: 50%;
-        transform: translate(-50%, -50%);
-        display: block;
-        background: white;
-        padding: 30px;
-        width: 300px;
-        border: 2px solid #000;
-    }
-}
+/* Bloque legacy neutralizado: la impresión actual usa .ticket-container en ticket.css */
 
 .action-buttons {
     display: flex;

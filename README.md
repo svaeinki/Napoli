@@ -2,7 +2,7 @@
 
 Sistema profesional de gestión de bodega para reparadora de calzado con base de datos SQLite, backups automáticos en Dropbox, sistema completo de pagos y abonos, tickets térmicos y tema oscuro.
 
-![Version](https://img.shields.io/badge/version-2.0.3-blue.svg)
+![Version](https://img.shields.io/badge/version-2.0.4-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)
 
@@ -355,6 +355,12 @@ zapateria-bodega/
 ---
 
 ## 📝 Changelog
+
+### v2.0.4 (2026-02-22)
+- 🖨️ Corrección robusta de recorte en tickets 58mm con márgenes de impresión forzados a `none`.
+- 📏 Nuevo ajuste calibrable de ancho útil 58mm (`44` a `54` mm, default `48` mm).
+- 🔁 API de impresión mejorada: `window.electronAPI.imprimir(opciones?)` retorna estado `{ success, error }`.
+- 🧾 Mejoras de wrapping en contenido largo para evitar cortes visuales en detalle/pie de ticket.
 
 ### v2.0.3 (2026-02-22)
 - 🔄 Flujo formalizado de actualización manual en Windows con instalador NSIS (in-place update).

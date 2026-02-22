@@ -37,7 +37,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     dropboxSubirBackupAhora: () => ipcRenderer.invoke('dropbox:subirBackupAhora'),
 
     // Impresión
-    imprimir: () => ipcRenderer.invoke('imprimir'),
+    imprimir: (opciones) => ipcRenderer.invoke('imprimir', opciones),
 
     // Configuración
     obtenerConfiguracion: () => ipcRenderer.invoke('config:obtener'),

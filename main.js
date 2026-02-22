@@ -424,9 +424,13 @@ function sanitizarConfigImpresora(printerConfig = {}) {
         ? printerConfig.fontProfile58.trim().toLowerCase()
         : '';
     const fontProfile58 = perfilesPermitidos.has(fontProfileRaw) ? fontProfileRaw : 'legible';
+    const contentWidthRaw = Number(printerConfig.contentWidth58mm);
+    const contentWidth58mm = Number.isFinite(contentWidthRaw)
+        ? Math.min(54, Math.max(44, contentWidthRaw))
+        : 48;
     const header = typeof printerConfig.header === 'string' ? printerConfig.header.slice(0, 500) : '';
     const footer = typeof printerConfig.footer === 'string' ? printerConfig.footer.slice(0, 500) : '';
-    return { width, header, footer, fontProfile58 };
+    return { width, header, footer, fontProfile58, contentWidth58mm };
 }
 
 function operacionBloqueadaPorRestore() {
@@ -1112,9 +1116,43 @@ ipcMain.handle('config:guardar', async (event, nuevaConfig) => {
 // HANDLER IPC - IMPRESIÓN
 // ============================================
 
-ipcMain.handle('imprimir', async () => {
-    if (mainWindow) {
-        mainWindow.webContents.print({ silent: false, printBackground: false });
+ipcMain.handle('imprimir', async (event, opciones = {}) => {
+    if (!mainWindow) {
+        return { success: false, error: 'Ventana principal no disponible' };
+    }
+
+    try {
+        const config = cargarConfiguracion();
+        const printerConfig = sanitizarConfigImpresora(config.printer || {});
+        const widthsPermitidos = new Set(['58mm', '80mm']);
+        const widthSolicitado = typeof opciones.width === 'string'
+            ? opciones.width.trim()
+            : '';
+        const widthFinal = widthsPermitidos.has(widthSolicitado)
+            ? widthSolicitado
+            : printerConfig.width;
+
+        await new Promise((resolve, reject) => {
+            mainWindow.webContents.print(
+                {
+                    silent: false,
+                    printBackground: false,
+                    margins: { marginType: 'none' }
+                },
+                (success, failureReason) => {
+                    if (success) {
+                        resolve();
+                        return;
+                    }
+                    reject(new Error(failureReason || `No se pudo imprimir ticket ${widthFinal}`));
+                }
+            );
+        });
+
+        return { success: true };
+    } catch (error) {
+        console.error('Error imprimiendo ticket:', error);
+        return { success: false, error: error.message || 'Error de impresión' };
     }
 });
 

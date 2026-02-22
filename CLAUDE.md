@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Project Overview
 
 Electron desktop application for **Napoli Reparadora de Calzado** — a Chilean shoe repair warehouse management system. The UI and variable names are in Spanish throughout.
-Current release target documented in this repo: **2.0.2**.
+Current release target documented in this repo: **2.0.4**.
 
 ## Commands
 
