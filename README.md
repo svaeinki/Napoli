@@ -2,7 +2,7 @@
 
 Sistema profesional de gestión de bodega para reparadora de calzado con base de datos SQLite, backups automáticos en Dropbox, sistema completo de pagos y abonos, tickets térmicos y tema oscuro.
 
-![Version](https://img.shields.io/badge/version-2.0.4-blue.svg)
+![Version](https://img.shields.io/badge/version-2.0.5-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)
 
@@ -262,7 +262,7 @@ Si cualquiera falla, la release no debe publicarse.
 
 ### 🚀 Release automático por tag (GitHub Releases)
 
-La publicación oficial ahora se dispara al hacer push de un tag con formato `v*` (por ejemplo `v2.0.4`).
+La publicación oficial ahora se dispara al hacer push de un tag con formato `v*` (por ejemplo `v2.0.5`).
 
 ```bash
 git tag vX.Y.Z
@@ -382,6 +382,12 @@ zapateria-bodega/
 ---
 
 ## 📝 Changelog
+
+### v2.0.5 (2026-02-23)
+- 🚀 Nuevo workflow de GitHub Actions para releases por tag `v*` con build en matriz Windows/macOS/Linux.
+- 📦 Soporte oficial de instalador Linux (`.AppImage`) en `x64`.
+- 🧼 Publicación de GitHub Release restringida a instaladores finales (`.exe`, `.dmg`, `.AppImage`) excluyendo artefactos auxiliares.
+- 🧾 Scripts de build actualizados: `build` ahora compila `win + mac + linux` y se agrega `build-linux`.
 
 ### v2.0.4 (2026-02-22)
 - 🖨️ Corrección robusta de recorte en tickets 58mm con márgenes de impresión forzados a `none`.

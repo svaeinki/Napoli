@@ -1,6 +1,6 @@
 {
   "name": "napoli-reparadora",
-  "version": "2.0.4",
+  "version": "2.0.5",
   "description": "Sistema de gestión de bodega para Napoli - Reparadora de Calzado",
   "main": "main.js",
   "scripts": {
