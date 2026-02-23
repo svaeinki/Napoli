@@ -212,14 +212,23 @@ npm run build-mac
 Salida esperada:
 - Imagen de disco `.dmg` en `dist/`.
 
-### Build combinada (macOS + Windows)
+### Build para Linux (`.AppImage`)
+
+```bash
+npm run build-linux
+```
+
+Salida esperada:
+- Instalador `.AppImage` en `dist/`.
+
+### Build combinada (Windows + macOS + Linux)
 
 ```bash
 npm run build
 ```
 
 Este script ejecuta:
-- `electron-builder --mac --win`
+- `electron-builder --win --mac --linux`
 
 > Recomendación práctica: generar cada build en su SO nativo para evitar problemas de toolchain/firma y acelerar troubleshooting.
 
@@ -233,10 +242,6 @@ Valida:
 1. Sintaxis JS
 2. Auditoría de dependencias runtime
 3. Build de Windows sin publicar
-
-### Nota sobre Linux
-
-Actualmente `package.json` no define target de empaquetado Linux (`linux`) en la configuración de `electron-builder`, por eso no hay script `build-linux`.
 
 ---
 
@@ -254,6 +259,28 @@ Este comando valida, en orden:
 3. Build de Windows (`check:build-win`)
 
 Si cualquiera falla, la release no debe publicarse.
+
+### 🚀 Release automático por tag (GitHub Releases)
+
+La publicación oficial ahora se dispara al hacer push de un tag con formato `v*` (por ejemplo `v2.0.4`).
+
+```bash
+git tag vX.Y.Z
+git push origin vX.Y.Z
+```
+
+Qué hace el workflow:
+1. Build en matriz por SO nativo: Windows, macOS y Linux.
+2. Genera instaladores `x64` por plataforma.
+3. Publica/actualiza el GitHub Release del tag.
+4. Adjunta **solo instaladores finales**:
+   - `.exe` (Windows)
+   - `.dmg` (macOS)
+   - `.AppImage` (Linux)
+
+Política de release:
+- En GitHub Releases se publican exclusivamente instaladores finales.
+- No se publican archivos de auto-update (`.yml`, `.blockmap`, `.zip`, checksums u otros auxiliares).
 
 ---
 

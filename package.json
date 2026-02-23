@@ -7,9 +7,10 @@
     "postinstall": "electron-rebuild -f -w better-sqlite3",
     "start": "node scripts/start-electron.js",
     "rebuild": "electron-rebuild",
-    "build": "electron-builder --mac --win",
+    "build": "electron-builder --win --mac --linux",
     "build-mac": "electron-builder --mac",
     "build-win": "electron-builder --win",
+    "build-linux": "electron-builder --linux",
     "check:syntax": "node scripts/check-syntax.js",
     "check:audit": "npm audit --omit=dev --audit-level=high",
     "check:build-win": "electron-builder --win --publish never",
@@ -54,7 +55,12 @@
     "mac": {
       "category": "public.app-category.business",
       "target": [
-        "dmg"
+        {
+          "target": "dmg",
+          "arch": [
+            "x64"
+          ]
+        }
       ],
       "icon": "build/icon.png"
     },
@@ -68,6 +74,16 @@
         }
       ],
       "icon": "build/icon.ico"
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
     }
   }
 }
