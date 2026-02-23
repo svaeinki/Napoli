@@ -24,26 +24,36 @@
 }
 
 @media print {
+    html,
     body {
+        margin: 0 !important;
+        padding: 0 !important;
+        min-height: 0 !important;
+        height: auto !important;
+        background: white !important;
+        overflow: visible !important;
+    }
+
+    body > * {
+        display: none !important;
+    }
+
+    #ticketContainer {
+        display: block !important;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+
+    #ticketContainer .ticket-container {
+        display: block !important;
+        width: auto;
         margin: 0;
         padding: 0;
     }
 
-    body * {
-        visibility: hidden;
-    }
-    
-    .ticket-container, .ticket-container * {
-        visibility: visible;
-    }
-
-    .ticket-container {
-        position: absolute;
-        left: 0;
-        top: 0;
-        width: 100%;
-        margin: 0;
-        padding: 0;
+    #ticketContainer .ticket-content.width-58mm {
+        margin-bottom: calc(0mm - var(--ticket-final-trim-mm, 0mm));
+        box-sizing: border-box;
     }
 }
 

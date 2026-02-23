@@ -4,54 +4,95 @@
         <h2>⚙️ Configuración de Impresión</h2>
 
         <div class="form-group">
-            <label>Ancho de Ticket</label>
-            <select id="configPrinterWidth">
-                <option value="58mm">58mm (Estándar)</option>
-                <option value="80mm">80mm (Ancho)</option>
-            </select>
-        </div>
-
-        <div class="form-group">
             <label>Tamaño de Letra (58mm)</label>
             <select id="configTicketFontProfile58">
                 <option value="compacto">Compacto (más contenido)</option>
                 <option value="legible">Legible (recomendado)</option>
                 <option value="extra_grande">Extra grande (máxima lectura)</option>
             </select>
-            <small>Este ajuste aplica solo a tickets 58mm. Para oscuridad, ajuste la densidad en el driver de la impresora.</small>
         </div>
 
         <div class="form-group">
-            <label>Ancho útil 58mm (mm)</label>
+            <label>Desplazamiento vertical 58mm (mm)</label>
             <input
-                id="configTicketContentWidth58"
+                id="configTicketVerticalShift58"
                 type="range"
-                min="44"
-                max="54"
+                min="0"
+                max="20"
                 step="0.5"
-                value="48"
-                oninput="actualizarPreviewAncho58mm(this.value)"
+                value="2"
+                oninput="actualizarPreviewOffsetSuperior58mm(this.value)"
             />
             <div style="margin-top: 6px;">
-                <strong id="configTicketContentWidth58Value">48.0 mm</strong>
+                <strong id="configTicketVerticalShift58Value">2.0 mm</strong>
             </div>
-            <small>Si se corta por la derecha, bajar 0.5 mm y reimprimir prueba.</small>
+            <small>Ajusta margen superior de impresión para bajar el inicio del ticket.</small>
         </div>
 
-        <div class="form-group full-width">
-            <label>Encabezado del Ticket</label>
-            <textarea id="configTicketHeader" rows="3"></textarea>
-            <small>Puede usar saltos de línea.</small>
-        </div>
+        <details class="config-advanced">
+            <summary>Ajustes avanzados</summary>
 
-        <div class="form-group full-width">
-            <label>Pie de Página del Ticket</label>
-            <textarea id="configTicketFooter" rows="3"></textarea>
-        </div>
+            <div class="form-group">
+                <label>Ancho de Ticket</label>
+                <select id="configPrinterWidth">
+                    <option value="58mm">58mm (Estándar)</option>
+                    <option value="80mm">80mm (Ancho)</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>Ancho útil 58mm (mm)</label>
+                <input
+                    id="configTicketContentWidth58"
+                    type="range"
+                    min="44"
+                    max="54"
+                    step="0.5"
+                    value="48"
+                    oninput="actualizarPreviewAncho58mm(this.value)"
+                />
+                <div style="margin-top: 6px;">
+                    <strong id="configTicketContentWidth58Value">48.0 mm</strong>
+                </div>
+                <small>Si se corta por la derecha, bajar 0.5 mm y reimprimir prueba.</small>
+            </div>
+
+            <div class="form-group">
+                <label>Recorte final 58mm (mm)</label>
+                <input
+                    id="configTicketFinalTrim58"
+                    type="range"
+                    min="0"
+                    max="8"
+                    step="0.5"
+                    value="0"
+                    oninput="actualizarPreviewRecorteFinal58mm(this.value)"
+                />
+                <div style="margin-top: 6px;">
+                    <strong id="configTicketFinalTrim58Value">0.0 mm</strong>
+                </div>
+                <small>Si sobra blanco al final, subir 0.5 mm y reimprimir prueba.</small>
+            </div>
+
+            <div class="form-group full-width">
+                <label>Encabezado del Ticket</label>
+                <textarea id="configTicketHeader" rows="3"></textarea>
+                <small>Puede usar saltos de línea.</small>
+            </div>
+
+            <div class="form-group full-width">
+                <label>Pie de Página del Ticket</label>
+                <textarea id="configTicketFooter" rows="3"></textarea>
+            </div>
+        </details>
 
         <div style="margin-top: 20px; text-align: right;">
             <button class="btn btn-primary" onclick="guardarConfiguracionImpresora()">💾 Guardar Configuración</button>
             <button class="btn btn-info" onclick="pruebaImpresion()">🖨 Prueba</button>
+            <button class="btn btn-secondary" onclick="cerrarConfiguracion()">Cerrar</button>
+            <small style="display: block; margin-top: 10px;">
+                La prueba usa los valores actuales del formulario; guardar los deja permanentes.
+            </small>
         </div>
     </div>
 </div>
@@ -68,7 +109,10 @@
         background-color: rgba(0, 0, 0, 0.5);
         display: flex;
         justify-content: center;
-        align-items: center;
+        align-items: flex-start;
+        overflow-y: auto;
+        padding: 16px 0;
+        box-sizing: border-box;
     }
 
     #modal-config .modal-content {
@@ -77,6 +121,8 @@
         border-radius: 8px;
         width: 90%;
         max-width: 500px;
+        max-height: calc(100vh - 32px);
+        overflow-y: auto;
         position: relative;
         box-shadow: 0 4px 6px var(--shadow);
     }
@@ -96,5 +142,22 @@
 
     #modal-config input[type="range"] {
         width: 100%;
+    }
+
+    #modal-config details.config-advanced {
+        border: 1px solid var(--preview-border);
+        border-radius: 8px;
+        padding: 10px 12px;
+        margin-top: 10px;
+    }
+
+    #modal-config details.config-advanced > summary {
+        cursor: pointer;
+        font-weight: 600;
+        margin-bottom: 10px;
+    }
+
+    #modal-config details.config-advanced[open] > summary {
+        margin-bottom: 12px;
     }
 </style>

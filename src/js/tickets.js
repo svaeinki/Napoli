@@ -2,6 +2,9 @@ const CONFIG_IMPRESION_DEFAULT = {
     width: '58mm', // '58mm' o '80mm'
     fontProfile58: 'legible', // compacto | legible | extra_grande
     contentWidth58mm: 48,
+    verticalShift58mm: 2,
+    finalTrim58mm: 0,
+    driverCompatAnchor58: true,
     header: 'NAPOLI\nReparadora de Calzado',
     footer: 'Gracias por preferir Napoli\nConserve este ticket'
 };
@@ -23,6 +26,39 @@ function contentWidth58ConDefault(valor, fallback = CONFIG_IMPRESION_DEFAULT.con
     return Math.min(54, Math.max(44, parsed));
 }
 
+function calibracion58ConDefault(valor, fallback, max = 8) {
+    const parsed = Number(valor);
+    const fallbackNumber = Number(fallback);
+    const fallbackSanitizado = Number.isFinite(fallbackNumber)
+        ? Math.min(max, Math.max(0, fallbackNumber))
+        : 0;
+    if (!Number.isFinite(parsed)) return fallbackSanitizado;
+    const clamped = Math.min(max, Math.max(0, parsed));
+    return Math.round(clamped * 2) / 2;
+}
+
+function normalizarConfigImpresion(config, fallback = CONFIG_IMPRESION_DEFAULT) {
+    const origen = (config && typeof config === 'object') ? config : {};
+    const width = origen.width === '80mm' ? '80mm' : '58mm';
+    const verticalShiftRaw = Number.isFinite(Number(origen.verticalShift58mm))
+        ? Number(origen.verticalShift58mm)
+        : Number(origen.topOffset58mm);
+    const driverCompatRaw = typeof origen.driverCompatAnchor58 === 'boolean'
+        ? origen.driverCompatAnchor58
+        : fallback.driverCompatAnchor58 !== false;
+    const driverCompatAnchor58 = width === '58mm' ? true : driverCompatRaw;
+    return {
+        width,
+        fontProfile58: perfil58ConDefault(origen.fontProfile58, fallback.fontProfile58),
+        contentWidth58mm: contentWidth58ConDefault(origen.contentWidth58mm, fallback.contentWidth58mm),
+        verticalShift58mm: calibracion58ConDefault(verticalShiftRaw, fallback.verticalShift58mm, 20),
+        finalTrim58mm: calibracion58ConDefault(origen.finalTrim58mm, fallback.finalTrim58mm, 8),
+        driverCompatAnchor58,
+        header: textoConDefault(origen.header, fallback.header),
+        footer: textoConDefault(origen.footer, fallback.footer)
+    };
+}
+
 const Tickets = {
     // Configuración por defecto
     config: { ...CONFIG_IMPRESION_DEFAULT },
@@ -30,25 +66,26 @@ const Tickets = {
     async init() {
         // Cargar configuración guardada
         const savedConfig = await window.electronAPI.obtenerConfiguracion();
-        if (savedConfig && savedConfig.printer) {
-            const printer = savedConfig.printer;
-            this.config = {
-                width: printer.width === '80mm' ? '80mm' : CONFIG_IMPRESION_DEFAULT.width,
-                fontProfile58: perfil58ConDefault(printer.fontProfile58),
-                contentWidth58mm: contentWidth58ConDefault(printer.contentWidth58mm),
-                header: textoConDefault(printer.header, CONFIG_IMPRESION_DEFAULT.header),
-                footer: textoConDefault(printer.footer, CONFIG_IMPRESION_DEFAULT.footer)
-            };
-        }
+        const printer = (savedConfig && savedConfig.printer) ? savedConfig.printer : {};
+        this.config = normalizarConfigImpresion(printer, CONFIG_IMPRESION_DEFAULT);
     },
 
-    async generarHTML(articulo) {
+    async generarHTML(articulo, configOverride = null) {
         // Asegurarse de tener la config actualizada
         await this.init();
 
-        const widthClass = this.config.width === '80mm' ? 'width-80mm' : 'width-58mm';
-        const fontProfile58 = perfil58ConDefault(this.config.fontProfile58);
-        const contentWidth58mm = contentWidth58ConDefault(this.config.contentWidth58mm);
+        const configEfectiva = (configOverride && typeof configOverride === 'object')
+            ? normalizarConfigImpresion({ ...this.config, ...configOverride }, CONFIG_IMPRESION_DEFAULT)
+            : normalizarConfigImpresion(this.config, CONFIG_IMPRESION_DEFAULT);
+
+        const widthClass = configEfectiva.width === '80mm' ? 'width-80mm' : 'width-58mm';
+        const fontProfile58 = perfil58ConDefault(configEfectiva.fontProfile58);
+        const contentWidth58mm = contentWidth58ConDefault(configEfectiva.contentWidth58mm);
+        const finalTrim58mm = calibracion58ConDefault(
+            configEfectiva.finalTrim58mm,
+            CONFIG_IMPRESION_DEFAULT.finalTrim58mm,
+            8
+        );
         const fontProfileClass = widthClass === 'width-58mm'
             ? `font58-${fontProfile58}`
             : '';
@@ -56,78 +93,80 @@ const Tickets = {
             ? `ticket-content ${widthClass} ${fontProfileClass}`
             : `ticket-content ${widthClass}`;
         const ticketInlineStyle = widthClass === 'width-58mm'
-            ? ` style="--ticket-content-width-mm: ${contentWidth58mm}mm;"`
+            ? ` style="--ticket-content-width-mm: ${contentWidth58mm}mm; --ticket-final-trim-mm: ${finalTrim58mm}mm;"`
             : '';
 
         // Formatear textos
-        const headerHtml = escaparHtml(String(this.config.header || '')).replace(/\n/g, '<br>');
-        const footerHtml = escaparHtml(String(this.config.footer || '')).replace(/\n/g, '<br>');
+        const headerHtml = escaparHtml(String(configEfectiva.header || '')).replace(/\n/g, '<br>');
+        const footerHtml = escaparHtml(String(configEfectiva.footer || '')).replace(/\n/g, '<br>');
         const numeroBodega = typeof articulo.numeroBodega === 'string' ? articulo.numeroBodega.trim() : '';
 
         return `
             <div class="${ticketClassName}"${ticketInlineStyle}>
-                <div class="ticket-header">
-                    ${headerHtml}
-                    <div class="ticket-meta ticket-code">TICKET #${String(articulo.id).padStart(4, '0')}</div>
-                    <div class="ticket-meta">${escaparHtml(articulo.fechaIngreso)}</div>
-                </div>
-
-                <div class="ticket-body">
-                    <div class="ticket-row ticket-row-stacked">
-                        <span class="ticket-label">Cliente:</span>
-                        <span class="ticket-value">${escaparHtml(articulo.nombreCliente)}</span>
-                    </div>
-                    <div class="ticket-row ticket-row-stacked">
-                        <span class="ticket-label">RUT:</span>
-                        <span class="ticket-value">${escaparHtml(articulo.rut)}</span>
-                    </div>
-                    ${articulo.telefono ? `
-                    <div class="ticket-row ticket-row-stacked">
-                        <span class="ticket-label">Tel:</span>
-                        <span class="ticket-value">${escaparHtml(articulo.telefono)}</span>
-                    </div>` : ''}
-                    
-                    <div class="ticket-divider"></div>
-
-                    <div class="ticket-row ticket-row-stacked">
-                        <span class="ticket-label">Servicio:</span>
-                        <span class="ticket-value">${escaparHtml(articulo.tipoArticulo)}</span>
-                    </div>
-                    
-                    <div class="ticket-detail-block">
-                        <span class="ticket-label">Detalle:</span>
-                        <span class="ticket-detail-text">${escaparHtml(articulo.descripcion)}</span>
+                <div class="ticket-main">
+                    <div class="ticket-header">
+                        ${headerHtml}
+                        <div class="ticket-meta ticket-code">TICKET #${String(articulo.id).padStart(4, '0')}</div>
+                        <div class="ticket-meta">${escaparHtml(articulo.fechaIngreso)}</div>
                     </div>
 
-                    ${numeroBodega ? `
-                    <div class="ticket-divider"></div>
-                    
-                    <div class="ticket-section-title">UBICACIÓN</div>
-                    <span class="ticket-big-text">
-                        ${escaparHtml(numeroBodega)}
-                    </span>
-                    ` : ''}
-
-                    ${articulo.valorTotal > 0 ? `
-                        <div class="ticket-totals">
-                            <div class="ticket-row">
-                                <span>Total:</span>
-                                <span>$${formatearMoneda(articulo.valorTotal)}</span>
-                            </div>
-                            <div class="ticket-row">
-                                <span>Abonado:</span>
-                                <span>$${formatearMoneda(articulo.totalAbonado)}</span>
-                            </div>
-                            <div class="ticket-total-row">
-                                <strong>SALDO:</strong>
-                                <strong>$${formatearMoneda(articulo.saldoPendiente)}</strong>
-                            </div>
+                    <div class="ticket-body">
+                        <div class="ticket-row ticket-row-stacked">
+                            <span class="ticket-label">Cliente:</span>
+                            <span class="ticket-value">${escaparHtml(articulo.nombreCliente)}</span>
                         </div>
-                    ` : ''}
-                </div>
+                        <div class="ticket-row ticket-row-stacked">
+                            <span class="ticket-label">RUT:</span>
+                            <span class="ticket-value">${escaparHtml(articulo.rut)}</span>
+                        </div>
+                        ${articulo.telefono ? `
+                        <div class="ticket-row ticket-row-stacked">
+                            <span class="ticket-label">Tel:</span>
+                            <span class="ticket-value">${escaparHtml(articulo.telefono)}</span>
+                        </div>` : ''}
+                        
+                        <div class="ticket-divider"></div>
 
-                <div class="ticket-footer">
-                    ${footerHtml}
+                        <div class="ticket-row ticket-row-stacked">
+                            <span class="ticket-label">Servicio:</span>
+                            <span class="ticket-value">${escaparHtml(articulo.tipoArticulo)}</span>
+                        </div>
+                        
+                        <div class="ticket-detail-block">
+                            <span class="ticket-label">Detalle:</span>
+                            <span class="ticket-detail-text">${escaparHtml(articulo.descripcion)}</span>
+                        </div>
+
+                        ${numeroBodega ? `
+                        <div class="ticket-divider"></div>
+                        
+                        <div class="ticket-section-title">UBICACIÓN</div>
+                        <span class="ticket-big-text">
+                            ${escaparHtml(numeroBodega)}
+                        </span>
+                        ` : ''}
+
+                        ${articulo.valorTotal > 0 ? `
+                            <div class="ticket-totals">
+                                <div class="ticket-row">
+                                    <span>Total:</span>
+                                    <span>$${formatearMoneda(articulo.valorTotal)}</span>
+                                </div>
+                                <div class="ticket-row">
+                                    <span>Abonado:</span>
+                                    <span>$${formatearMoneda(articulo.totalAbonado)}</span>
+                                </div>
+                                <div class="ticket-total-row">
+                                    <strong>SALDO:</strong>
+                                    <strong>$${formatearMoneda(articulo.saldoPendiente)}</strong>
+                                </div>
+                            </div>
+                        ` : ''}
+                    </div>
+
+                    <div class="ticket-footer">
+                        ${footerHtml}
+                    </div>
                 </div>
             </div>
         `;
@@ -135,13 +174,7 @@ const Tickets = {
 
     async guardarConfiguracion(nuevaConfig) {
         const configTentativa = { ...this.config, ...nuevaConfig };
-        this.config = {
-            width: configTentativa.width === '80mm' ? '80mm' : '58mm',
-            fontProfile58: perfil58ConDefault(configTentativa.fontProfile58),
-            contentWidth58mm: contentWidth58ConDefault(configTentativa.contentWidth58mm),
-            header: textoConDefault(configTentativa.header, CONFIG_IMPRESION_DEFAULT.header),
-            footer: textoConDefault(configTentativa.footer, CONFIG_IMPRESION_DEFAULT.footer)
-        };
+        this.config = normalizarConfigImpresion(configTentativa, CONFIG_IMPRESION_DEFAULT);
         await window.electronAPI.guardarConfiguracion({ printer: this.config });
         return { success: true };
     }

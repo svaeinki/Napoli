@@ -419,6 +419,16 @@ function descifrarToken(tokenCifrado) {
 function sanitizarConfigImpresora(printerConfig = {}) {
     const widthsPermitidos = new Set(['58mm', '80mm']);
     const perfilesPermitidos = new Set(['compacto', 'legible', 'extra_grande']);
+    const sanitizarCalibracion58mm = (valor, fallback, max = 8) => {
+        const parsed = Number(valor);
+        const fallbackNumber = Number(fallback);
+        const fallbackSanitizado = Number.isFinite(fallbackNumber)
+            ? Math.min(max, Math.max(0, fallbackNumber))
+            : 0;
+        if (!Number.isFinite(parsed)) return fallbackSanitizado;
+        const clamped = Math.min(max, Math.max(0, parsed));
+        return Math.round(clamped * 2) / 2;
+    };
     const width = widthsPermitidos.has(printerConfig.width) ? printerConfig.width : '58mm';
     const fontProfileRaw = typeof printerConfig.fontProfile58 === 'string'
         ? printerConfig.fontProfile58.trim().toLowerCase()
@@ -428,9 +438,27 @@ function sanitizarConfigImpresora(printerConfig = {}) {
     const contentWidth58mm = Number.isFinite(contentWidthRaw)
         ? Math.min(54, Math.max(44, contentWidthRaw))
         : 48;
+    const verticalShiftRaw = Number.isFinite(Number(printerConfig.verticalShift58mm))
+        ? printerConfig.verticalShift58mm
+        : printerConfig.topOffset58mm;
+    const verticalShift58mm = sanitizarCalibracion58mm(verticalShiftRaw, 2, 20);
+    const finalTrim58mm = sanitizarCalibracion58mm(printerConfig.finalTrim58mm, 0, 8);
+    const driverCompatAnchor58 = typeof printerConfig.driverCompatAnchor58 === 'boolean'
+        ? printerConfig.driverCompatAnchor58
+        : true;
     const header = typeof printerConfig.header === 'string' ? printerConfig.header.slice(0, 500) : '';
     const footer = typeof printerConfig.footer === 'string' ? printerConfig.footer.slice(0, 500) : '';
-    return { width, header, footer, fontProfile58, contentWidth58mm };
+    return {
+        width,
+        header,
+        footer,
+        fontProfile58,
+        contentWidth58mm,
+        verticalShift58mm,
+        topOffset58mm: verticalShift58mm,
+        finalTrim58mm,
+        driverCompatAnchor58
+    };
 }
 
 function operacionBloqueadaPorRestore() {
@@ -1131,14 +1159,31 @@ ipcMain.handle('imprimir', async (event, opciones = {}) => {
         const widthFinal = widthsPermitidos.has(widthSolicitado)
             ? widthSolicitado
             : printerConfig.width;
+        const verticalShiftSolicitado = Number(opciones.verticalShiftMm);
+        const verticalShiftBase = Number.isFinite(verticalShiftSolicitado)
+            ? verticalShiftSolicitado
+            : Number(printerConfig.verticalShift58mm);
+        const verticalShiftMm = Number.isFinite(verticalShiftBase)
+            ? Math.min(20, Math.max(0, verticalShiftBase))
+            : 0;
+        const verticalShiftPx = Math.round((verticalShiftMm * 96) / 25.4);
+        const printOptions = {
+            silent: false,
+            printBackground: false,
+            margins: widthFinal === '58mm'
+                ? {
+                    marginType: 'custom',
+                    top: verticalShiftPx,
+                    bottom: 0,
+                    left: 0,
+                    right: 0
+                }
+                : { marginType: 'none' }
+        };
 
         await new Promise((resolve, reject) => {
             mainWindow.webContents.print(
-                {
-                    silent: false,
-                    printBackground: false,
-                    margins: { marginType: 'none' }
-                },
+                printOptions,
                 (success, failureReason) => {
                     if (success) {
                         resolve();

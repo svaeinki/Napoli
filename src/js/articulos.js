@@ -3,8 +3,13 @@
 // ============================================
 
 async function imprimirTicketConConfigActual() {
-    const width = window.Tickets && window.Tickets.config ? window.Tickets.config.width : '58mm';
-    const resultado = await window.electronAPI.imprimir({ width });
+    const config = (window.Tickets && window.Tickets.config) ? window.Tickets.config : {};
+    const width = config.width === '80mm' ? '80mm' : '58mm';
+    const verticalShiftRaw = Number(config.verticalShift58mm);
+    const verticalShiftMm = width === '58mm' && Number.isFinite(verticalShiftRaw)
+        ? verticalShiftRaw
+        : 0;
+    const resultado = await window.electronAPI.imprimir({ width, verticalShiftMm });
     if (!resultado || !resultado.success) {
         const mensaje = resultado && resultado.error
             ? resultado.error
