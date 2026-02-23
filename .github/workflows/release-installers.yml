@@ -22,7 +22,7 @@ jobs:
             artifact_name: installer-windows
             artifact_glob: dist/*.exe
           - os_name: macOS
-            runner: macos-13
+            runner: macos-15-intel
             build_command: npm run build-mac -- --publish never
             artifact_name: installer-macos
             artifact_glob: dist/*.dmg
