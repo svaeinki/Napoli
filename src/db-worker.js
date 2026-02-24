@@ -106,7 +106,14 @@ try {
 }
 
 if (parentPort) {
-    parentPort.on('message', (message) => {
-        void onMessage(message);
+    parentPort.on('message', async (message) => {
+        try {
+            await onMessage(message);
+        } catch (error) {
+            parentPort.postMessage({
+                type: 'fatal',
+                error: error && error.message ? error.message : String(error)
+            });
+        }
     });
 }

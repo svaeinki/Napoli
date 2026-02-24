@@ -8,13 +8,16 @@ function formatearFechaHora(fechaIso) {
     return formatearFechaChile(fechaIso, { fallback: 'N/A' });
 }
 
-function setRestoreStatus(mensajeHtml, tipo = 'warning') {
+// IMPORTANTE: trustedHtml debe contener únicamente HTML construido en el código.
+// Todo dato dinámico (rutas, nombres, mensajes de error) DEBE ser escapado con escaparHtml()
+// antes de interpolarlo. Nunca pasar datos del usuario o de la BD sin escapar.
+function setRestoreStatus(trustedHtml, tipo = 'warning') {
     const box = document.getElementById('restoreStatusBox');
     if (!box) return;
 
     box.className = `restore-status ${tipo}`;
     box.style.display = 'block';
-    box.innerHTML = mensajeHtml;
+    box.innerHTML = trustedHtml;
 }
 
 function actualizarChecklistItem(id, clase, texto) {

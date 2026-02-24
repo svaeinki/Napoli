@@ -113,7 +113,8 @@ function parsearFechaLocalChile(texto) {
     const meridiem = normalizarMeridiem(match[7]);
 
     if (anio < 100) {
-        anio += 2000;
+        // Ventana deslizante: >= 50 → siglo XX (1950–1999), < 50 → siglo XXI (2000–2049)
+        anio += anio >= 50 ? 1900 : 2000;
     }
 
     if (meridiem) {

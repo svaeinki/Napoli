@@ -75,8 +75,9 @@ async function mostrarModalPago(id) {
         abonosList.innerHTML = html;
     }
 
-    // Guardar ID en el modal para usarlo después
+    // Guardar ID y saldo en el modal para usarlos después
     modal.dataset.articuloId = id;
+    modal.dataset.saldoPendiente = articulo.saldoPendiente;
     modal.scrollTop = 0;
     if (modalContent) {
         modalContent.scrollTop = 0;
@@ -89,6 +90,9 @@ async function mostrarModalPago(id) {
 }
 
 async function registrarNuevoAbono() {
+    const btnRegistrar = document.querySelector('#modalPago .btn-success[onclick*="registrarNuevoAbono"]');
+    if (btnRegistrar) btnRegistrar.disabled = true;
+
     try {
         const modal = document.getElementById('modalPago');
         const articuloId = parseInt(modal.dataset.articuloId, 10);
@@ -103,6 +107,12 @@ async function registrarNuevoAbono() {
 
         if (!monto || monto <= 0) {
             mostrarNotificacion('❌ Ingrese un monto válido', true);
+            return;
+        }
+
+        const saldoPendiente = Number(modal.dataset.saldoPendiente);
+        if (Number.isFinite(saldoPendiente) && saldoPendiente > 0 && monto > saldoPendiente) {
+            mostrarNotificacion(`❌ El monto no puede superar el saldo pendiente ($${formatearMoneda(saldoPendiente)})`, true);
             return;
         }
 
@@ -122,6 +132,8 @@ async function registrarNuevoAbono() {
     } catch (error) {
         console.error('Error registrando abono:', error);
         mostrarNotificacion(`❌ Error al registrar abono: ${error.message}`, true);
+    } finally {
+        if (btnRegistrar) btnRegistrar.disabled = false;
     }
 }
 

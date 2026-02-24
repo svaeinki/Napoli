@@ -23,6 +23,9 @@ async function imprimirTicketConConfigActual() {
 async function ingresarArticulo(e) {
     e.preventDefault();
 
+    const submitBtn = e.target ? e.target.querySelector('[type="submit"]') : null;
+    if (submitBtn) submitBtn.disabled = true;
+
     try {
     const rutInput = document.getElementById('rut').value.trim();
 
@@ -108,6 +111,8 @@ async function ingresarArticulo(e) {
     } catch (error) {
         console.error('Error ingresando artículo:', error);
         mostrarNotificacion('❌ Error al ingresar el artículo', true);
+    } finally {
+        if (submitBtn) submitBtn.disabled = false;
     }
 }
 

@@ -432,7 +432,7 @@ class DatabaseManager {
             if (!Number.isFinite(abonoInicialRaw) || abonoInicialRaw < 0) {
                 return { success: false, error: 'El abono inicial debe ser un número mayor o igual a 0' };
             }
-            const abonoInicial = abonoInicialRaw;
+            const abonoInicial = Math.round(abonoInicialRaw);
             if (abonoInicial > valorTotalNum) {
                 return { success: false, error: 'El abono inicial no puede ser mayor al valor total' };
             }
@@ -514,7 +514,8 @@ class DatabaseManager {
 
     buscar(termino) {
         try {
-            const patron = `%${termino}%`;
+            const terminoSafe = String(termino).slice(0, 500);
+            const patron = `%${terminoSafe}%`;
             // Para el ID usamos el término exacto (si es número) o un valor imposible si no lo es
             // Pero como SQLite es flexible con tipos, pasamos el termino tal cual. 
             // Si termino es "abc", id = "abc" será falso.
@@ -522,7 +523,7 @@ class DatabaseManager {
             // Para mayor seguridad de tipos si termino es numerico lo casteamos?
             // SQLite maneja '1' = 1 como true.
 
-            return this.statements.buscar.all(termino, patron, patron, patron, patron, patron);
+            return this.statements.buscar.all(terminoSafe, patron, patron, patron, patron, patron);
         } catch (error) {
             console.error('Error al buscar:', error);
             throw error;
@@ -598,7 +599,7 @@ class DatabaseManager {
     registrarAbono(articuloId, monto, metodoPago = 'Efectivo', observaciones = '') {
         try {
             const articuloIdNum = Number(articuloId);
-            const montoNum = Number(monto);
+            const montoNum = Math.round(Number(monto));
 
             if (!Number.isInteger(articuloIdNum) || articuloIdNum <= 0) {
                 return { success: false, error: 'ID de artículo inválido' };

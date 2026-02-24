@@ -3,9 +3,27 @@ const fetch = require('isomorphic-fetch');
 const fs = require('fs');
 const path = require('path');
 
+const DROPBOX_MAX_UPLOAD_BYTES = 150 * 1024 * 1024; // 150 MB — límite razonable para backups de zapatería
+
+function leerArchivoConGuardia(rutaArchivo) {
+    const stat = fs.statSync(rutaArchivo);
+    if (stat.size > DROPBOX_MAX_UPLOAD_BYTES) {
+        throw new Error(
+            `El archivo es demasiado grande para subir a Dropbox (${Math.round(stat.size / 1024 / 1024)} MB, máximo ${Math.round(DROPBOX_MAX_UPLOAD_BYTES / 1024 / 1024)} MB)`
+        );
+    }
+    return fs.readFileSync(rutaArchivo);
+}
+
 class DropboxManager {
     constructor(accessToken) {
-        this.accessToken = accessToken;
+        // Non-enumerable para que el token no aparezca en console.log(dropboxManager)
+        Object.defineProperty(this, 'accessToken', {
+            value: accessToken,
+            writable: false,
+            enumerable: false,
+            configurable: false
+        });
         this.dbx = new Dropbox({ accessToken, fetch });
         this.configurado = !!accessToken;
         console.log('📦 Dropbox Manager inicializado');
@@ -43,7 +61,7 @@ class DropboxManager {
         }
 
         try {
-            const contenido = fs.readFileSync(archivoLocal);
+            const contenido = leerArchivoConGuardia(archivoLocal);
             const nombreArchivo = path.basename(archivoLocal);
             
             const response = await this.dbx.filesUpload({
@@ -67,7 +85,7 @@ class DropboxManager {
         }
 
         try {
-            const contenido = fs.readFileSync(archivoLocal);
+            const contenido = leerArchivoConGuardia(archivoLocal);
             const nombreArchivo = path.basename(archivoLocal);
             
             const response = await this.dbx.filesUpload({
@@ -91,7 +109,7 @@ class DropboxManager {
         }
 
         try {
-            const contenido = fs.readFileSync(archivoLocal);
+            const contenido = leerArchivoConGuardia(archivoLocal);
             
             const response = await this.dbx.filesUpload({
                 path: rutaDropbox,

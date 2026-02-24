@@ -19,6 +19,7 @@ let dbService;
 let dropboxManager;
 let diagnostics;
 let workerRetryTimer = null;
+let workerRetryCount = 0;
 
 const USER_DATA_PATH = app.getPath('userData');
 const DB_PATH = path.join(USER_DATA_PATH, 'napoli.db');
@@ -28,6 +29,7 @@ const BACKUP_STATUS_PATH = path.join(USER_DATA_PATH, 'backup-status.json');
 const BACKUP_CLOSE_TIMEOUT_MS = 15000;
 const DROPBOX_UPLOAD_TIMEOUT_MS = 12000;
 const DB_WORKER_RETRY_INTERVAL_MS = 30000;
+const DB_WORKER_MAX_RETRIES = 10;
 const REQUIRED_BACKUP_TABLES = ['articulos', 'abonos', 'auditoria'];
 const RESTORE_BUSY_MESSAGE = 'Restauración en curso. Intente nuevamente al terminar.';
 const WARNING_TOKEN_NO_CIFRADO = 'Tu sistema no permite cifrado local del token de Dropbox; se guardará sin cifrar en este equipo.';
@@ -688,23 +690,33 @@ function iniciarReintentoWorkerDb() {
         clearInterval(workerRetryTimer);
         workerRetryTimer = null;
     }
+    workerRetryCount = 0;
 
     workerRetryTimer = setInterval(() => {
         if (!dbService || restauracionEnCurso) {
             return;
         }
         if (dbService.getMode() === 'worker') {
+            workerRetryCount = 0; // Restaurado exitosamente, reiniciar contador
+            return;
+        }
+        if (workerRetryCount >= DB_WORKER_MAX_RETRIES) {
+            logDiag('db:worker_retry', { success: false, error: `Límite de reintentos alcanzado (${DB_WORKER_MAX_RETRIES}), permaneciendo en modo legacy` });
+            clearInterval(workerRetryTimer);
+            workerRetryTimer = null;
             return;
         }
 
+        workerRetryCount += 1;
         void dbService.tryPromoteToWorker()
             .then((resultado) => {
                 if (resultado && resultado.success && resultado.changed) {
+                    workerRetryCount = 0;
                     logDiag('db:worker_retry', { success: true, mode: dbService.getMode() });
                 }
             })
             .catch((error) => {
-                logDiag('db:worker_retry', { success: false, error: error.message });
+                logDiag('db:worker_retry', { success: false, error: error.message, intento: workerRetryCount });
             });
     }, DB_WORKER_RETRY_INTERVAL_MS);
 }
