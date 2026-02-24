@@ -58,8 +58,11 @@ async function ingresarArticulo(e) {
         descripcion: document.getElementById('descripcion').value.trim(),
         numeroBodega: numeroBodegaInput ? numeroBodegaInput.toUpperCase() : null,
         observaciones: document.getElementById('observaciones').value.trim(),
-        fechaIngreso: new Date().toLocaleString('es-CL'),
-        valorTotal: valorTotal
+        fechaIngreso: new Date().toISOString(),
+        valorTotal: valorTotal,
+        abonoInicial: abonoInicial,
+        metodoPagoInicial: document.getElementById('metodoPagoInicial').value,
+        observacionesAbonoInicial: 'Abono inicial al ingresar'
     };
 
     const resultado = await window.electronAPI.insertarArticulo(nuevoArticulo);
@@ -67,14 +70,24 @@ async function ingresarArticulo(e) {
     if (resultado.success) {
         const articuloId = resultado.id;
 
-        // Si hay abono inicial, registrarlo
-        if (abonoInicial > 0) {
-            const metodoPago = document.getElementById('metodoPagoInicial').value;
-            await window.electronAPI.pagoRegistrarAbono(articuloId, abonoInicial, metodoPago, 'Abono inicial al ingresar');
-        }
-
         // Obtener artículo completo con abonos actualizados
-        const articuloCompleto = await window.electronAPI.obtenerPorId(articuloId);
+        let articuloCompleto = null;
+        try {
+            articuloCompleto = await window.electronAPI.obtenerPorId(articuloId);
+        } catch (errorDetalle) {
+            console.warn('No se pudo recargar artículo recién insertado, se usará snapshot local:', errorDetalle);
+        }
+        if (!articuloCompleto) {
+            articuloCompleto = {
+                ...nuevoArticulo,
+                id: articuloId,
+                totalAbonado: abonoInicial,
+                saldoPendiente: Math.max(0, valorTotal - abonoInicial),
+                estadoPago: abonoInicial >= valorTotal && valorTotal > 0
+                    ? 'Pagado'
+                    : (abonoInicial > 0 ? 'Abonado' : 'Sin pago')
+            };
+        }
 
         document.getElementById('formIngresar').reset();
         mostrarNotificacion('✅ Artículo ingresado correctamente. Imprimiendo ticket...');
@@ -99,35 +112,113 @@ async function ingresarArticulo(e) {
 }
 
 async function marcarEntregado(id) {
-    const articulo = await window.electronAPI.obtenerPorId(id);
-    if (articulo && confirm(`¿Entregar el artículo "${articulo.descripcion}" a ${articulo.nombreCliente}?`)) {
-        const resultado = await window.electronAPI.actualizarEstado(id, 'Entregado');
-        if (resultado.success) {
-            await actualizarInventario();
-            mostrarNotificacion('✅ Artículo marcado como entregado');
+    try {
+        const articulo = await window.electronAPI.obtenerPorId(id);
+        const confirmado = articulo
+            ? await confirmarAccionAsync({
+                titulo: 'Confirmar entrega',
+                mensaje: `¿Entregar el artículo "${articulo.descripcion}" a ${articulo.nombreCliente}?`,
+                confirmarTexto: 'Entregar',
+                peligro: false
+            })
+            : false;
+        if (articulo && confirmado) {
+            const resultado = await window.electronAPI.actualizarEstado(id, 'Entregado');
+            if (resultado.success) {
+                if (typeof actualizarFilaInventarioEstado === 'function') {
+                    actualizarFilaInventarioEstado(id, 'Entregado');
+                }
+                if (typeof marcarInventarioDirty === 'function') {
+                    marcarInventarioDirty();
+                }
+                mostrarNotificacion('✅ Artículo marcado como entregado');
+                setTimeout(() => {
+                    const tabIngresar = document.getElementById('ingresar');
+                    const ingresarActivo = Boolean(tabIngresar && tabIngresar.classList.contains('active'));
+                    if (ingresarActivo && typeof desbloquearFormularioIngreso === 'function') {
+                        desbloquearFormularioIngreso({ focusRut: false });
+                    }
+                    if (typeof asegurarInputsEditablesActivos === 'function') {
+                        asegurarInputsEditablesActivos('#buscar');
+                    }
+                }, 0);
+            } else {
+                mostrarNotificacion(`❌ No se pudo marcar entregado: ${resultado.error}`, true);
+            }
         }
+    } catch (error) {
+        console.error('Error marcando artículo como entregado:', error);
+        mostrarNotificacion(`❌ Error marcando entregado: ${error.message}`, true);
     }
 }
 
 async function marcarEnBodega(id) {
-    if (confirm(`¿Devolver el artículo a bodega?`)) {
-        const resultado = await window.electronAPI.actualizarEstado(id, 'En Bodega');
-        if (resultado.success) {
-            await actualizarInventario();
-            mostrarNotificacion('↩ Artículo devuelto a bodega');
+    try {
+        const confirmado = await confirmarAccionAsync({
+            titulo: 'Confirmar devolución',
+            mensaje: '¿Devolver el artículo a bodega?',
+            confirmarTexto: 'Devolver',
+            peligro: false
+        });
+        if (confirmado) {
+            const resultado = await window.electronAPI.actualizarEstado(id, 'En Bodega');
+            if (resultado.success) {
+                if (typeof actualizarFilaInventarioEstado === 'function') {
+                    actualizarFilaInventarioEstado(id, 'En Bodega');
+                }
+                if (typeof marcarInventarioDirty === 'function') {
+                    marcarInventarioDirty();
+                }
+                mostrarNotificacion('↩ Artículo devuelto a bodega');
+                setTimeout(() => {
+                    const tabIngresar = document.getElementById('ingresar');
+                    const ingresarActivo = Boolean(tabIngresar && tabIngresar.classList.contains('active'));
+                    if (ingresarActivo && typeof desbloquearFormularioIngreso === 'function') {
+                        desbloquearFormularioIngreso({ focusRut: false });
+                    }
+                    if (typeof asegurarInputsEditablesActivos === 'function') {
+                        asegurarInputsEditablesActivos('#buscar');
+                    }
+                }, 0);
+            } else {
+                mostrarNotificacion(`❌ No se pudo devolver a bodega: ${resultado.error}`, true);
+            }
         }
+    } catch (error) {
+        console.error('Error devolviendo artículo a bodega:', error);
+        mostrarNotificacion(`❌ Error devolviendo a bodega: ${error.message}`, true);
     }
 }
 
 async function eliminarArticulo(id) {
-    const articulo = await window.electronAPI.obtenerPorId(id);
-    if (articulo && confirm(`¿Está seguro de eliminar el artículo "${articulo.descripcion}"?\n\nEsta acción no se puede deshacer.`)) {
-        const resultado = await window.electronAPI.eliminar(id);
-        if (resultado.success) {
-            await actualizarInventario();
-            await buscarArticulos();
-            mostrarNotificacion('🗑️ Artículo eliminado');
+    try {
+        const articulo = await window.electronAPI.obtenerPorId(id);
+        const confirmado = articulo
+            ? await confirmarAccionAsync({
+                titulo: 'Confirmar eliminación',
+                mensaje: `¿Está seguro de eliminar el artículo "${articulo.descripcion}"?\n\nEsta acción no se puede deshacer.`,
+                confirmarTexto: 'Eliminar',
+                peligro: true
+            })
+            : false;
+        if (articulo && confirmado) {
+            const resultado = await window.electronAPI.eliminar(id);
+            if (resultado.success) {
+                if (typeof eliminarFilaInventarioLocal === 'function') {
+                    eliminarFilaInventarioLocal(id);
+                }
+                if (typeof marcarInventarioDirty === 'function') {
+                    marcarInventarioDirty();
+                }
+                void buscarArticulos();
+                mostrarNotificacion('🗑️ Artículo eliminado');
+            } else {
+                mostrarNotificacion(`❌ No se pudo eliminar: ${resultado.error}`, true);
+            }
         }
+    } catch (error) {
+        console.error('Error eliminando artículo:', error);
+        mostrarNotificacion(`❌ Error eliminando artículo: ${error.message}`, true);
     }
 }
 
@@ -191,14 +282,19 @@ async function verTicket(id) {
 }
 
 async function reimprimirTicket(id) {
-    const articulo = await window.electronAPI.obtenerPorId(id);
-    if (articulo) {
-        const ticketGenerado = await generarTicket(articulo);
-        if (ticketGenerado) {
-            setTimeout(async () => {
-                await imprimirTicketConConfigActual();
-            }, 500); // Pequeño delay para asegurar que el DOM se actualizó
+    try {
+        const articulo = await window.electronAPI.obtenerPorId(id);
+        if (articulo) {
+            const ticketGenerado = await generarTicket(articulo);
+            if (ticketGenerado) {
+                setTimeout(async () => {
+                    await imprimirTicketConConfigActual();
+                }, 500); // Pequeño delay para asegurar que el DOM se actualizó
+            }
         }
+    } catch (error) {
+        console.error('Error reimprimiendo ticket:', error);
+        mostrarNotificacion(`❌ Error reimprimiendo ticket: ${error.message}`, true);
     }
 }
 

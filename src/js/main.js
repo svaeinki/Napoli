@@ -9,6 +9,16 @@ window.onload = async function () {
         // Esperar a que los templates se carguen completamente
         await window.templatesListos;
 
+        if (typeof inicializarGuardiaFocoInputs === 'function') {
+            inicializarGuardiaFocoInputs();
+        }
+        if (typeof refrescarEstadoRuntimeUI === 'function') {
+            await refrescarEstadoRuntimeUI();
+            setInterval(() => {
+                void refrescarEstadoRuntimeUI();
+            }, 30000);
+        }
+
         await actualizarInventario();
         await verificarDropbox();
     } catch (error) {
@@ -24,8 +34,13 @@ window.onload = async function () {
 let scanBuffer = '';
 let lastKeyTime = 0;
 const MAX_DELAY_MS = 50; // Tiempo máximo entre teclas para considerar escáner
+const SCANNER_ENABLED = false;
 
 document.addEventListener('keydown', (e) => {
+    if (!SCANNER_ENABLED) {
+        return;
+    }
+
     const currentTime = Date.now();
     const timeDiff = currentTime - lastKeyTime;
     lastKeyTime = currentTime;

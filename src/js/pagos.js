@@ -10,6 +10,7 @@ async function mostrarModalPago(id) {
     const modal = document.getElementById('modalPago');
     const modalTitle = document.getElementById('modalPagoTitle');
     const pagoInfo = document.getElementById('pagoInfoModal');
+    const modalContent = modal ? modal.querySelector('.modal-content-pagos') : null;
     if (!modal || !modalTitle || !pagoInfo) {
         throw new Error('Modal de pagos no está disponible en el DOM');
     }
@@ -20,7 +21,7 @@ async function mostrarModalPago(id) {
     const estadoPago = (typeof articulo.estadoPago === 'string' && articulo.estadoPago.trim())
         ? articulo.estadoPago
         : 'Sin pago';
-    const estadoPagoClase = estadoPago.toLowerCase().replace(/\s+/g, '');
+    const estadoPagoClase = obtenerClaseEstadoPago(estadoPago);
     modalTitle.textContent = `Pagos - ${numeroBodega} - ${articulo.nombreCliente}`;
     
     // Mostrar información de pago
@@ -55,15 +56,16 @@ async function mostrarModalPago(id) {
     }
     
     if (abonos.length === 0) {
-        abonosList.innerHTML = '<p style="text-align: center; color: var(--text-muted); padding: 20px;">No hay abonos registrados</p>';
+        abonosList.innerHTML = '<p class="abonos-empty">No hay abonos registrados</p>';
     } else {
         let html = '';
         abonos.forEach(abono => {
+            const fechaAbono = formatearFechaChile(abono.fecha);
             html += `
                 <div class="abono-item">
                     <div class="abono-header">
                         <span class="abono-monto">$${formatearMoneda(abono.monto)}</span>
-                        <span class="abono-fecha">${new Date(abono.fecha).toLocaleString('es-CL')}</span>
+                        <span class="abono-fecha">${escaparHtml(fechaAbono)}</span>
                     </div>
                     <div class="abono-metodo">💳 ${escaparHtml(abono.metodoPago)}</div>
                     ${abono.observaciones ? `<div style="font-size: 12px; color: var(--text-muted); margin-top: 5px;">📝 ${escaparHtml(abono.observaciones)}</div>` : ''}
@@ -75,10 +77,14 @@ async function mostrarModalPago(id) {
 
     // Guardar ID en el modal para usarlo después
     modal.dataset.articuloId = id;
+    modal.scrollTop = 0;
+    if (modalContent) {
+        modalContent.scrollTop = 0;
+    }
     modal.style.display = 'block';
     } catch (error) {
         console.error('Error mostrando modal de pago:', error);
-        mostrarNotificacion('❌ Error al cargar información de pagos', true);
+        mostrarNotificacion(`❌ Error al cargar información de pagos: ${error.message}`, true);
     }
 }
 
@@ -115,7 +121,7 @@ async function registrarNuevoAbono() {
         }
     } catch (error) {
         console.error('Error registrando abono:', error);
-        mostrarNotificacion('❌ Error al registrar abono', true);
+        mostrarNotificacion(`❌ Error al registrar abono: ${error.message}`, true);
     }
 }
 
@@ -135,7 +141,13 @@ async function actualizarValorServicio() {
             return;
         }
 
-        if (confirm(`¿Está seguro de actualizar el valor total a $${formatearMoneda(nuevoValor)}?`)) {
+        const confirmado = await confirmarAccionAsync({
+            titulo: 'Confirmar actualización de valor',
+            mensaje: `¿Está seguro de actualizar el valor total a $${formatearMoneda(nuevoValor)}?`,
+            confirmarTexto: 'Actualizar valor',
+            peligro: false
+        });
+        if (confirmado) {
             const resultado = await window.electronAPI.pagoActualizarValor(articuloId, nuevoValor);
 
             if (resultado.success) {
@@ -151,7 +163,7 @@ async function actualizarValorServicio() {
         }
     } catch (error) {
         console.error('Error actualizando valor del servicio:', error);
-        mostrarNotificacion('❌ Error al actualizar valor', true);
+        mostrarNotificacion(`❌ Error al actualizar valor: ${error.message}`, true);
     }
 }
 

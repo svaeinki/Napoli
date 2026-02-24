@@ -1,0 +1,15 @@
+<div id="modalConfirmacion" class="modal" style="display: none;">
+    <div class="modal-content modal-content-confirmacion">
+        <div class="modal-header">
+            <h2 id="modalConfirmacionTitulo">Confirmar acción</h2>
+            <span class="close" onclick="resolverModalConfirmacion(false)">&times;</span>
+        </div>
+        <div class="confirmacion-body">
+            <p id="modalConfirmacionMensaje"></p>
+        </div>
+        <div class="confirmacion-actions">
+            <button class="btn btn-secondary" onclick="resolverModalConfirmacion(false)">Cancelar</button>
+            <button id="modalConfirmacionAceptar" class="btn btn-primary" onclick="resolverModalConfirmacion(true)">Confirmar</button>
+        </div>
+    </div>
+</div>

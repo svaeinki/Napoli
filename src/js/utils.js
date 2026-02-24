@@ -22,6 +22,257 @@ function formatearMoneda(valor) {
     return new Intl.NumberFormat('es-CL').format(valor || 0);
 }
 
+function obtenerTabActivaId() {
+    if (!document || typeof document.querySelector !== 'function') {
+        return null;
+    }
+    const activa = document.querySelector('.tab-content.active');
+    return activa ? activa.id : null;
+}
+
+function registrarEventoDiagnostico(type, extra = {}) {
+    if (typeof window === 'undefined' || !window.electronAPI || typeof window.electronAPI.diagEvent !== 'function') {
+        return;
+    }
+    const payload = {
+        type,
+        tab: obtenerTabActivaId(),
+        ...extra
+    };
+    window.electronAPI.diagEvent(payload).catch(() => {
+        // No bloquear UI por fallos de diagnóstico.
+    });
+}
+
+function asegurarBannerRuntime() {
+    let banner = document.getElementById('runtimeWarningBanner');
+    if (banner) {
+        return banner;
+    }
+
+    banner = document.createElement('div');
+    banner.id = 'runtimeWarningBanner';
+    banner.className = 'runtime-warning-banner';
+    document.body.insertBefore(banner, document.body.firstChild);
+    return banner;
+}
+
+async function refrescarEstadoRuntimeUI() {
+    if (!window.electronAPI || typeof window.electronAPI.obtenerRuntimeInfo !== 'function') {
+        return;
+    }
+
+    try {
+        const info = await window.electronAPI.obtenerRuntimeInfo();
+        const banner = asegurarBannerRuntime();
+        const warning = info && typeof info.dbWarning === 'string' ? info.dbWarning.trim() : '';
+        if (warning) {
+            banner.textContent = `Modo compatibilidad (rendimiento reducido): ${warning}`;
+            banner.style.display = 'block';
+        } else {
+            banner.textContent = '';
+            banner.style.display = 'none';
+        }
+    } catch (error) {
+        // Ignorar: la app debe continuar aunque no se pueda consultar runtime info.
+    }
+}
+
+function asegurarInputsEditablesActivos(scopeSelector) {
+    let scope = null;
+    if (document && typeof document.querySelector === 'function') {
+        scope = document.querySelector(scopeSelector);
+    }
+    if (!scope && scopeSelector === '#ingresar' && document && typeof document.getElementById === 'function') {
+        scope = document.getElementById('ingresar');
+    }
+    if (!scope && scopeSelector === '#buscar' && document && typeof document.getElementById === 'function') {
+        scope = document.getElementById('buscar');
+    }
+    if (!scope) {
+        return;
+    }
+
+    scope.removeAttribute('inert');
+    scope.style.pointerEvents = '';
+
+    if (scopeSelector === '#ingresar' && document && typeof document.getElementById === 'function') {
+        const formIngresar = document.getElementById('formIngresar');
+        if (formIngresar) {
+            formIngresar.removeAttribute('inert');
+            formIngresar.style.pointerEvents = '';
+        }
+    }
+
+    let controles = [];
+    if (typeof scope.querySelectorAll === 'function') {
+        controles = Array.from(scope.querySelectorAll('input, textarea, button, select'));
+    }
+    if (controles.length === 0 && scopeSelector === '#ingresar' && document && typeof document.getElementById === 'function') {
+        const formIngresar = document.getElementById('formIngresar');
+        if (formIngresar && typeof formIngresar.querySelectorAll === 'function') {
+            controles = Array.from(formIngresar.querySelectorAll('input, textarea, button, select'));
+        }
+    }
+    controles.forEach((control) => {
+        if (!control) return;
+        control.disabled = false;
+
+        // Dentro de ingresar/buscar no se espera readonly persistente.
+        if (Object.prototype.hasOwnProperty.call(control, 'readOnly')) {
+            control.readOnly = false;
+        }
+        control.removeAttribute('inert');
+        control.style.pointerEvents = '';
+    });
+
+    registrarEventoDiagnostico('inputs:unlock', { scope: scopeSelector, controles: controles.length });
+}
+
+let guardiaFocoInputsInicializada = false;
+
+function inicializarGuardiaFocoInputs() {
+    if (guardiaFocoInputsInicializada) {
+        return;
+    }
+    guardiaFocoInputsInicializada = true;
+
+    document.addEventListener('pointerdown', (event) => {
+        const target = event.target;
+        if (!target || typeof target.matches !== 'function') {
+            return;
+        }
+
+        if (!target.matches('input, textarea')) {
+            return;
+        }
+
+        const scope = target.closest('#ingresar, #buscar');
+        if (!scope) {
+            return;
+        }
+
+        if (target.disabled || target.readOnly) {
+            return;
+        }
+
+        const inputObjetivo = target;
+        const verificarFoco = () => {
+            if (document.activeElement === inputObjetivo) {
+                return;
+            }
+            if (typeof inputObjetivo.focus === 'function') {
+                inputObjetivo.focus({ preventScroll: true });
+            }
+            registrarEventoDiagnostico('focus_guard_forced', {
+                scope: scope.id || null,
+                controlId: inputObjetivo.id || null
+            });
+        };
+
+        if (typeof requestAnimationFrame === 'function') {
+            requestAnimationFrame(() => setTimeout(verificarFoco, 0));
+        } else {
+            setTimeout(verificarFoco, 0);
+        }
+    }, true);
+}
+
+let resolverConfirmacionPendiente = null;
+let modalConfirmacionLimpieza = null;
+
+function limpiarListenersModalConfirmacion() {
+    if (typeof modalConfirmacionLimpieza === 'function') {
+        modalConfirmacionLimpieza();
+        modalConfirmacionLimpieza = null;
+    }
+}
+
+function resolverModalConfirmacion(decision) {
+    const modal = document.getElementById('modalConfirmacion');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+    limpiarListenersModalConfirmacion();
+
+    if (resolverConfirmacionPendiente) {
+        const resolve = resolverConfirmacionPendiente;
+        resolverConfirmacionPendiente = null;
+        resolve(Boolean(decision));
+    }
+}
+
+async function confirmarAccionAsync({ titulo = 'Confirmar acción', mensaje = '', confirmarTexto = 'Confirmar', peligro = false } = {}) {
+    const modal = document.getElementById('modalConfirmacion');
+    const tituloEl = document.getElementById('modalConfirmacionTitulo');
+    const mensajeEl = document.getElementById('modalConfirmacionMensaje');
+    const aceptarBtn = document.getElementById('modalConfirmacionAceptar');
+
+    if (!modal || !tituloEl || !mensajeEl || !aceptarBtn) {
+        return confirm(`${titulo}\n\n${mensaje}`);
+    }
+
+    if (resolverConfirmacionPendiente) {
+        resolverModalConfirmacion(false);
+    }
+
+    tituloEl.textContent = titulo;
+    mensajeEl.textContent = mensaje;
+    aceptarBtn.textContent = confirmarTexto;
+    aceptarBtn.classList.toggle('btn-danger', Boolean(peligro));
+    if (!peligro) {
+        aceptarBtn.classList.remove('btn-danger');
+        aceptarBtn.classList.add('btn-primary');
+    } else {
+        aceptarBtn.classList.remove('btn-primary');
+    }
+
+    modal.style.display = 'block';
+
+    const onBackdropClick = (event) => {
+        if (event.target === modal) {
+            resolverModalConfirmacion(false);
+        }
+    };
+    const onEsc = (event) => {
+        if (event.key === 'Escape') {
+            event.preventDefault();
+            resolverModalConfirmacion(false);
+        }
+    };
+
+    modal.addEventListener('click', onBackdropClick);
+    document.addEventListener('keydown', onEsc);
+    modalConfirmacionLimpieza = () => {
+        modal.removeEventListener('click', onBackdropClick);
+        document.removeEventListener('keydown', onEsc);
+    };
+
+    return await new Promise((resolve) => {
+        resolverConfirmacionPendiente = resolve;
+    });
+}
+
+function desbloquearFormularioIngreso({ focusRut = true } = {}) {
+    asegurarInputsEditablesActivos('#ingresar');
+
+    if (!focusRut) {
+        return;
+    }
+
+    const campoRut = document.getElementById('rut');
+    if (!campoRut || typeof campoRut.focus !== 'function') {
+        return;
+    }
+
+    const enfocar = () => campoRut.focus();
+    if (typeof requestAnimationFrame === 'function') {
+        requestAnimationFrame(enfocar);
+    } else {
+        setTimeout(enfocar, 0);
+    }
+}
+
 function showTab(tabName) {
     document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
     document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -40,93 +291,252 @@ function showTab(tabName) {
     }
 
     if (tabName === 'inventario') {
-        actualizarInventario();
+        const debeRefrescar = typeof inventarioTienePendienteRefresh === 'function'
+            ? inventarioTienePendienteRefresh()
+            : true;
+        if (debeRefrescar) {
+            void actualizarInventario({ force: true, deferIfHidden: false });
+        }
+    } else if (tabName === 'ingresar') {
+        desbloquearFormularioIngreso({ focusRut: true });
+    } else if (tabName === 'buscar') {
+        asegurarInputsEditablesActivos('#buscar');
+        const campoBuscar = document.getElementById('campoBuscar');
+        if (campoBuscar && typeof campoBuscar.focus === 'function') {
+            setTimeout(() => campoBuscar.focus(), 0);
+        }
     } else if (tabName === 'backup') {
         verificarDropbox();
         if (typeof refrescarChecklistActualizacion === 'function') {
             refrescarChecklistActualizacion();
         }
     }
+
+    registrarEventoDiagnostico('tab:show', { tabName });
 }
 
-function construirFechaSegura(anio, mes, dia, hora = 0, minuto = 0, segundo = 0) {
-    const fecha = new Date(anio, mes - 1, dia, hora, minuto, segundo);
-    if (Number.isNaN(fecha.getTime())) return null;
-    if (fecha.getFullYear() !== anio || fecha.getMonth() !== mes - 1 || fecha.getDate() !== dia) {
+const TIMEZONE_CHILE = 'America/Santiago';
+
+const FORMATEADOR_PARTES_CHILE = new Intl.DateTimeFormat('en-CA', {
+    timeZone: TIMEZONE_CHILE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23'
+});
+
+const FORMATEADOR_FECHA_CHILE = new Intl.DateTimeFormat('es-CL', {
+    timeZone: TIMEZONE_CHILE,
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
+});
+
+const FORMATEADOR_DIA_CHILE = new Intl.DateTimeFormat('en-CA', {
+    timeZone: TIMEZONE_CHILE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+});
+
+function esFechaValida(fecha) {
+    return fecha instanceof Date && !Number.isNaN(fecha.getTime());
+}
+
+function obtenerPartesEnChile(fecha) {
+    const partes = FORMATEADOR_PARTES_CHILE.formatToParts(fecha);
+    const resultado = {};
+
+    for (const parte of partes) {
+        if (
+            parte.type === 'year' ||
+            parte.type === 'month' ||
+            parte.type === 'day' ||
+            parte.type === 'hour' ||
+            parte.type === 'minute' ||
+            parte.type === 'second'
+        ) {
+            resultado[parte.type] = Number(parte.value);
+        }
+    }
+
+    return resultado;
+}
+
+function obtenerOffsetChileMinutos(fecha) {
+    const partes = obtenerPartesEnChile(fecha);
+    const asUtc = Date.UTC(
+        partes.year,
+        partes.month - 1,
+        partes.day,
+        partes.hour,
+        partes.minute,
+        partes.second
+    );
+    return Math.round((asUtc - fecha.getTime()) / 60000);
+}
+
+function construirFechaChileSegura(anio, mes, dia, hora = 0, minuto = 0, segundo = 0) {
+    const localAsUtc = Date.UTC(anio, mes - 1, dia, hora, minuto, segundo);
+    let utcMs = localAsUtc - (obtenerOffsetChileMinutos(new Date(localAsUtc)) * 60000);
+    utcMs = localAsUtc - (obtenerOffsetChileMinutos(new Date(utcMs)) * 60000);
+
+    const fecha = new Date(utcMs);
+    if (!esFechaValida(fecha)) return null;
+
+    const validacion = obtenerPartesEnChile(fecha);
+    if (
+        validacion.year !== anio ||
+        validacion.month !== mes ||
+        validacion.day !== dia ||
+        validacion.hour !== hora ||
+        validacion.minute !== minuto ||
+        validacion.second !== segundo
+    ) {
         return null;
     }
+
     return fecha;
 }
 
+function normalizarMeridiem(raw) {
+    if (!raw) return null;
+    const normalizado = String(raw).toLowerCase().replace(/[\s.]/g, '');
+    if (normalizado === 'am') return 'am';
+    if (normalizado === 'pm') return 'pm';
+    return null;
+}
+
+function parsearFechaIso(texto) {
+    if (!/^\d{4}-\d{2}-\d{2}T/.test(texto)) {
+        return null;
+    }
+    const fecha = new Date(texto);
+    return esFechaValida(fecha) ? fecha : null;
+}
+
+function parsearFechaLocalChile(texto) {
+    const match = texto.match(
+        /^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})(?:[,\s]+(\d{1,2})(?::(\d{1,2}))?(?::(\d{1,2}))?)?(?:\s*([AaPp]\.?\s*[Mm]\.?))?$/
+    );
+    if (!match) {
+        return null;
+    }
+
+    const dia = Number(match[1]);
+    const mes = Number(match[2]);
+    let anio = Number(match[3]);
+    let hora = Number(match[4] || 0);
+    const minuto = Number(match[5] || 0);
+    const segundo = Number(match[6] || 0);
+    const meridiem = normalizarMeridiem(match[7]);
+
+    if (anio < 100) anio += 2000;
+
+    if (meridiem) {
+        if (hora < 1 || hora > 12) return null;
+        if (meridiem === 'pm' && hora < 12) hora += 12;
+        if (meridiem === 'am' && hora === 12) hora = 0;
+    } else if (hora < 0 || hora > 23) {
+        return null;
+    }
+
+    if (minuto < 0 || minuto > 59 || segundo < 0 || segundo > 59) {
+        return null;
+    }
+
+    return construirFechaChileSegura(anio, mes, dia, hora, minuto, segundo);
+}
+
 function parseFechaIngreso(fechaIngreso) {
-    if (!fechaIngreso) return null;
+    if (fechaIngreso === null || fechaIngreso === undefined) return null;
 
     if (fechaIngreso instanceof Date) {
-        return Number.isNaN(fechaIngreso.getTime()) ? null : new Date(fechaIngreso.getTime());
+        return esFechaValida(fechaIngreso) ? new Date(fechaIngreso.getTime()) : null;
     }
 
     if (typeof fechaIngreso === 'number') {
         const fecha = new Date(fechaIngreso);
-        return Number.isNaN(fecha.getTime()) ? null : fecha;
+        return esFechaValida(fecha) ? fecha : null;
     }
 
-    // Formatos históricos esperados:
-    // - dd/mm/yyyy, hh:mm:ss
-    // - dd-mm-yyyy hh:mm:ss
-    // - dd.mm.yyyy
-    if (typeof fechaIngreso === 'string') {
-        const texto = fechaIngreso.trim();
-        if (!texto) return null;
-
-        const matchFechaLocal = texto.match(
-            /^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})(?:[,\s]+(\d{1,2})(?::(\d{1,2}))?(?::(\d{1,2}))?)?$/
-        );
-
-        if (matchFechaLocal) {
-            const dia = parseInt(matchFechaLocal[1], 10);
-            const mes = parseInt(matchFechaLocal[2], 10);
-            let anio = parseInt(matchFechaLocal[3], 10);
-            const hora = parseInt(matchFechaLocal[4] || '0', 10);
-            const minuto = parseInt(matchFechaLocal[5] || '0', 10);
-            const segundo = parseInt(matchFechaLocal[6] || '0', 10);
-
-            if (anio < 100) {
-                anio += 2000;
-            }
-
-            const fechaLocal = construirFechaSegura(anio, mes, dia, hora, minuto, segundo);
-            if (fechaLocal) {
-                return fechaLocal;
-            }
-        }
-
-        // Formatos ISO y otros parseables nativamente.
-        const fechaISO = new Date(texto);
-        if (!Number.isNaN(fechaISO.getTime())) {
-            return fechaISO;
-        }
+    if (typeof fechaIngreso !== 'string') {
+        return null;
     }
 
-    return null;
+    const texto = fechaIngreso.trim();
+    if (!texto) return null;
+
+    const iso = parsearFechaIso(texto);
+    if (iso) return iso;
+
+    const localChile = parsearFechaLocalChile(texto);
+    if (localChile) return localChile;
+
+    const fallback = new Date(texto);
+    return esFechaValida(fallback) ? fallback : null;
+}
+
+function obtenerClaveDiaChile(fecha) {
+    return FORMATEADOR_DIA_CHILE.format(fecha);
+}
+
+function parsearClaveDia(clave) {
+    const [anio, mes, dia] = String(clave).split('-').map((value) => Number(value));
+    if (!Number.isInteger(anio) || !Number.isInteger(mes) || !Number.isInteger(dia)) {
+        return null;
+    }
+    return { anio, mes, dia };
+}
+
+function diferenciaDiasEntreClaves(claveInicio, claveFin) {
+    const inicio = parsearClaveDia(claveInicio);
+    const fin = parsearClaveDia(claveFin);
+    if (!inicio || !fin) return null;
+
+    const inicioUtc = Date.UTC(inicio.anio, inicio.mes - 1, inicio.dia);
+    const finUtc = Date.UTC(fin.anio, fin.mes - 1, fin.dia);
+    return Math.floor((finUtc - inicioUtc) / (1000 * 60 * 60 * 24));
+}
+
+function obtenerDiasEnBodega(fechaIngreso) {
+    const fecha = parseFechaIngreso(fechaIngreso);
+    if (!fecha) return null;
+
+    const claveIngreso = obtenerClaveDiaChile(fecha);
+    const claveHoy = obtenerClaveDiaChile(new Date());
+    return diferenciaDiasEntreClaves(claveIngreso, claveHoy);
+}
+
+function formatearFechaChile(fechaRaw, { fallback = 'Fecha inválida' } = {}) {
+    const fecha = parseFechaIngreso(fechaRaw);
+    if (!fecha) return fallback;
+    return FORMATEADOR_FECHA_CHILE.format(fecha);
+}
+
+function formatearFechaChileParaExport(fechaRaw) {
+    const fecha = parseFechaIngreso(fechaRaw);
+    if (!fecha) return fechaRaw ? String(fechaRaw) : '';
+    return FORMATEADOR_FECHA_CHILE.format(fecha);
 }
 
 function calcularDiasEnBodega(fechaIngreso) {
     try {
-        const fecha = parseFechaIngreso(fechaIngreso);
-        if (!fecha) return 'Fecha inválida';
-
-        const ahora = new Date();
-        // Resetear horas para comparar solo días
-        fecha.setHours(0, 0, 0, 0);
-        ahora.setHours(0, 0, 0, 0);
-        const diferencia = ahora - fecha;
-        const dias = Math.floor(diferencia / (1000 * 60 * 60 * 24));
+        const dias = obtenerDiasEnBodega(fechaIngreso);
+        if (!Number.isInteger(dias)) return 'Fecha inválida';
 
         if (dias === 0) return 'Hoy';
         if (dias === 1) return 'Ayer';
-        if (dias < 0) return 'Fecha futura'; // Por si acaso
+        if (dias < 0) return 'Fecha futura';
         if (dias < 30) return `Hace ${dias} días`;
-        if (dias < 60) return `Hace 1 mes`;
+        if (dias < 60) return 'Hace 1 mes';
         if (dias < 365) return `Hace ${Math.floor(dias / 30)} meses`;
         return `Hace ${Math.floor(dias / 365)} años`;
     } catch (error) {
@@ -137,12 +547,8 @@ function calcularDiasEnBodega(fechaIngreso) {
 
 function obtenerClaseAlerta(fechaIngreso) {
     try {
-        const fecha = parseFechaIngreso(fechaIngreso);
-        if (!fecha) return '';
-
-        const ahora = new Date();
-        const dias = Math.floor((ahora - fecha) / (1000 * 60 * 60 * 24));
-
+        const dias = obtenerDiasEnBodega(fechaIngreso);
+        if (!Number.isInteger(dias)) return '';
         if (dias >= 60) return 'alerta-critica';
         if (dias >= 30) return 'alerta-warning';
         return '';
@@ -175,6 +581,17 @@ function formatearNumeroInput(input) {
 function obtenerValorNumerico(inputElement) {
     const valor = inputElement.value.replace(/\./g, '').replace(/,/g, '');
     return parseInt(valor) || 0;
+}
+
+function obtenerClaseEstadoPago(estadoPago) {
+    const estado = typeof estadoPago === 'string'
+        ? estadoPago.trim().toLowerCase()
+        : '';
+
+    if (!estado) return 'sin';
+    if (estado === 'pagado') return 'pagado';
+    if (estado === 'abonado') return 'abonado';
+    return 'sin';
 }
 
 function escaparHtml(texto) {

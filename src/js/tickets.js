@@ -106,6 +106,7 @@ const Tickets = {
             : '';
         const footerHtml = escaparHtml(String(configEfectiva.footer || '')).replace(/\n/g, '<br>');
         const numeroBodega = typeof articulo.numeroBodega === 'string' ? articulo.numeroBodega.trim() : '';
+        const fechaIngresoTicket = formatearFechaChile(articulo.fechaIngreso);
 
         return `
             <div class="${ticketClassName}"${ticketInlineStyle}>
@@ -114,7 +115,7 @@ const Tickets = {
                     <div class="ticket-header">
                         ${headerHtml}
                         <div class="ticket-meta ticket-code">TICKET #${String(articulo.id).padStart(4, '0')}</div>
-                        <div class="ticket-meta">${escaparHtml(articulo.fechaIngreso)}</div>
+                        <div class="ticket-meta">${escaparHtml(fechaIngresoTicket)}</div>
                     </div>
 
                     <div class="ticket-body">
@@ -180,10 +181,23 @@ const Tickets = {
     },
 
     async guardarConfiguracion(nuevaConfig) {
-        const configTentativa = { ...this.config, ...nuevaConfig };
-        this.config = normalizarConfigImpresion(configTentativa, CONFIG_IMPRESION_DEFAULT);
-        await window.electronAPI.guardarConfiguracion({ printer: this.config });
-        return { success: true };
+        try {
+            const configTentativa = { ...this.config, ...nuevaConfig };
+            const configNormalizada = normalizarConfigImpresion(configTentativa, CONFIG_IMPRESION_DEFAULT);
+            const resultado = await window.electronAPI.guardarConfiguracion({ printer: configNormalizada });
+
+            if (!resultado || !resultado.success) {
+                return {
+                    success: false,
+                    error: (resultado && resultado.error) ? resultado.error : 'No se pudo guardar configuración'
+                };
+            }
+
+            this.config = configNormalizada;
+            return { success: true };
+        } catch (error) {
+            return { success: false, error: error.message || 'Error guardando configuración' };
+        }
     }
 };
 

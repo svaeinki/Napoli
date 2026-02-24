@@ -119,7 +119,8 @@ async function guardarConfiguracionImpresora() {
             mostrarNotificacion('✅ Configuración guardada');
             cerrarConfiguracion();
         } else {
-            mostrarNotificacion('❌ Error guardando configuración', true);
+            const detalle = (resultado && resultado.error) ? `: ${resultado.error}` : '';
+            mostrarNotificacion(`❌ Error guardando configuración${detalle}`, true);
         }
     } catch (error) {
         console.error('Error guardando configuración de impresión:', error);
@@ -137,7 +138,7 @@ async function pruebaImpresion() {
         descripcion: 'Esta es una impresión de prueba para verificar el formato.',
         numeroBodega: 'TEST',
         observaciones: 'Sin observaciones',
-        fechaIngreso: new Date().toLocaleString('es-CL'),
+        fechaIngreso: new Date().toISOString(),
         valorTotal: 15000,
         totalAbonado: 5000,
         saldoPendiente: 10000

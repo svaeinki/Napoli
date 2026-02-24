@@ -3,42 +3,317 @@
 // ============================================
 
 let articulosFiltrados = [];
+let inventarioCache = [];
+let inventarioCacheCargado = false;
+let inventarioDirty = false;
+let inventarioRefreshInFlight = null;
 
-async function actualizarInventario() {
-    try {
-        const stats = await window.electronAPI.obtenerEstadisticas();
+function inventarioTienePendienteRefresh() {
+    return inventarioDirty || !inventarioCacheCargado;
+}
 
-        document.getElementById('totalArticulos').textContent = stats.total;
-        document.getElementById('enBodega').textContent = stats.enBodega;
-        document.getElementById('entregados').textContent = stats.entregados;
+function marcarInventarioDirty() {
+    inventarioDirty = true;
+}
 
-        // Calcular artículos antiguos (más de 30 días)
-        const todosArticulos = await window.electronAPI.obtenerTodos();
-        const articulosAntiguos = todosArticulos.filter(art => {
-            if (art.estado !== 'En Bodega') return false;
-            try {
-                const fecha = parseFechaIngreso(art.fechaIngreso);
-                if (!fecha) return false;
-                fecha.setHours(0, 0, 0, 0);
-
-                const ahora = new Date();
-                ahora.setHours(0, 0, 0, 0);
-
-                const dias = Math.floor((ahora - fecha) / (1000 * 60 * 60 * 24));
-                return dias >= 30;
-            } catch (error) {
-                return false;
-            }
-        });
-
-        // Actualizar badge en la pestaña
-        actualizarBadgeInventario(articulosAntiguos.length);
-
-        await aplicarFiltro();
-    } catch (error) {
-        console.error('Error actualizando inventario:', error);
-        mostrarNotificacion('❌ Error al cargar el inventario', true);
+function normalizarArticuloId(id) {
+    const idNum = Number(id);
+    if (!Number.isInteger(idNum) || idNum <= 0) {
+        return null;
     }
+    return idNum;
+}
+
+function leerContador(id) {
+    const elemento = document.getElementById(id);
+    if (!elemento) return null;
+    const numero = parseInt(String(elemento.textContent || '0').replace(/[^\d-]/g, ''), 10);
+    return Number.isFinite(numero) ? numero : 0;
+}
+
+function escribirContador(id, valor) {
+    const elemento = document.getElementById(id);
+    if (!elemento) return;
+    elemento.textContent = String(Math.max(0, valor));
+}
+
+function ajustarContadoresPorCambioEstado(estadoAnterior, nuevoEstado) {
+    if (!estadoAnterior || !nuevoEstado || estadoAnterior === nuevoEstado) {
+        return;
+    }
+
+    const enBodega = leerContador('enBodega');
+    const entregados = leerContador('entregados');
+    if (enBodega === null || entregados === null) {
+        return;
+    }
+
+    if (estadoAnterior === 'En Bodega' && nuevoEstado === 'Entregado') {
+        escribirContador('enBodega', enBodega - 1);
+        escribirContador('entregados', entregados + 1);
+    } else if (estadoAnterior === 'Entregado' && nuevoEstado === 'En Bodega') {
+        escribirContador('enBodega', enBodega + 1);
+        escribirContador('entregados', entregados - 1);
+    }
+}
+
+function ajustarContadoresPorEliminacion(estadoAnterior) {
+    const total = leerContador('totalArticulos');
+    if (total !== null) {
+        escribirContador('totalArticulos', total - 1);
+    }
+
+    if (estadoAnterior === 'En Bodega') {
+        const enBodega = leerContador('enBodega');
+        if (enBodega !== null) {
+            escribirContador('enBodega', enBodega - 1);
+        }
+    } else if (estadoAnterior === 'Entregado') {
+        const entregados = leerContador('entregados');
+        if (entregados !== null) {
+            escribirContador('entregados', entregados - 1);
+        }
+    }
+}
+
+function construirHtmlAccionesArticulo(articuloId, estado) {
+    const botonEstado = estado === 'En Bodega'
+        ? `<button class="btn btn-success btn-small" onclick="marcarEntregado(${articuloId})">✓ Entregar</button>`
+        : `<button class="btn btn-warning btn-small" onclick="marcarEnBodega(${articuloId})">↩ Devolver</button>`;
+
+    return `
+        ${botonEstado}
+        <button class="btn btn-info btn-small" onclick="mostrarModalPago(${articuloId})">💰 Pagos</button>
+        <button class="btn btn-secondary btn-small" onclick="verTicket(${articuloId})" title="Ver Ticket">👁️</button>
+        <button class="btn btn-primary btn-small" onclick="reimprimirTicket(${articuloId})">🖨</button>
+        <button class="btn btn-danger btn-small" onclick="eliminarArticulo(${articuloId})">🗑</button>
+    `;
+}
+
+function obtenerFilaArticuloInventario(articuloId) {
+    const tabla = document.getElementById('tablaInventario');
+    if (!tabla || typeof tabla.querySelector !== 'function') {
+        return null;
+    }
+    return tabla.querySelector(`tr[data-articulo-id="${articuloId}"]`);
+}
+
+function mostrarMensajeTablaVaciaSiCorresponde() {
+    const tabla = document.getElementById('tablaInventario');
+    if (!tabla || typeof tabla.querySelectorAll !== 'function') {
+        return;
+    }
+    const filas = tabla.querySelectorAll('tbody tr');
+    if (!filas || filas.length > 0) {
+        return;
+    }
+
+    tabla.innerHTML = '<p style="text-align: center; padding: 40px; color: var(--text-muted);">No hay artículos para mostrar.</p>';
+}
+
+function actualizarFilaInventarioEstado(id, nuevoEstado) {
+    const articuloId = normalizarArticuloId(id);
+    if (!articuloId || (nuevoEstado !== 'En Bodega' && nuevoEstado !== 'Entregado')) {
+        return false;
+    }
+
+    const articulo = inventarioCache.find((item) => Number(item.id) === articuloId);
+    const fila = obtenerFilaArticuloInventario(articuloId);
+    const estadoAnterior = articulo
+        ? articulo.estado
+        : (fila && fila.dataset ? fila.dataset.estado : null);
+
+    if (articulo) {
+        articulo.estado = nuevoEstado;
+        articulo.fechaEntrega = nuevoEstado === 'Entregado' ? new Date().toISOString() : null;
+    }
+
+    ajustarContadoresPorCambioEstado(estadoAnterior, nuevoEstado);
+
+    if (!fila) {
+        return true;
+    }
+
+    const filtro = obtenerFiltroActualInventario();
+    const debeOcultarsePorFiltro =
+        (filtro === 'bodega' && nuevoEstado !== 'En Bodega') ||
+        (filtro === 'entregados' && nuevoEstado !== 'Entregado');
+
+    if (debeOcultarsePorFiltro) {
+        articulosFiltrados = articulosFiltrados.filter((item) => Number(item.id) !== articuloId);
+        if (typeof fila.remove === 'function') {
+            fila.remove();
+        }
+        mostrarMensajeTablaVaciaSiCorresponde();
+        return true;
+    }
+
+    fila.dataset.estado = nuevoEstado;
+
+    const claseAlerta = nuevoEstado === 'En Bodega' && articulo
+        ? obtenerClaseAlerta(articulo.fechaIngreso)
+        : '';
+    fila.className = claseAlerta;
+
+    const tiempoStrong = fila.querySelector('.celda-tiempo strong');
+    if (tiempoStrong) {
+        const tiempoTexto = (nuevoEstado === 'En Bodega' && articulo)
+            ? calcularDiasEnBodega(articulo.fechaIngreso)
+            : '-';
+        tiempoStrong.textContent = tiempoTexto;
+        tiempoStrong.className = claseAlerta ? 'text-alerta' : '';
+    }
+
+    const celdaEstado = fila.querySelector('.celda-estado');
+    if (celdaEstado) {
+        const claseEstado = nuevoEstado === 'En Bodega' ? 'status-bodega' : 'status-entregado';
+        celdaEstado.innerHTML = `<span class="status-badge ${claseEstado}">${escaparHtml(nuevoEstado)}</span>`;
+    }
+
+    const celdaAcciones = fila.querySelector('.celda-acciones');
+    if (celdaAcciones) {
+        celdaAcciones.innerHTML = construirHtmlAccionesArticulo(articuloId, nuevoEstado);
+    }
+
+    return true;
+}
+
+function eliminarFilaInventarioLocal(id) {
+    const articuloId = normalizarArticuloId(id);
+    if (!articuloId) {
+        return false;
+    }
+
+    const indexCache = inventarioCache.findIndex((item) => Number(item.id) === articuloId);
+    const articulo = indexCache >= 0 ? inventarioCache[indexCache] : null;
+    const estadoAnterior = articulo ? articulo.estado : null;
+    if (indexCache >= 0) {
+        inventarioCache.splice(indexCache, 1);
+    }
+
+    const indexFiltrados = articulosFiltrados.findIndex((item) => Number(item.id) === articuloId);
+    if (indexFiltrados >= 0) {
+        articulosFiltrados.splice(indexFiltrados, 1);
+    }
+
+    ajustarContadoresPorEliminacion(estadoAnterior);
+
+    const fila = obtenerFilaArticuloInventario(articuloId);
+    if (fila && typeof fila.remove === 'function') {
+        fila.remove();
+    }
+    mostrarMensajeTablaVaciaSiCorresponde();
+
+    return true;
+}
+
+function actualizarInventarioManual() {
+    return actualizarInventario({ force: true, deferIfHidden: false });
+}
+
+function inventarioEstaVisible() {
+    const tabInventario = document.getElementById('inventario');
+    return Boolean(tabInventario && tabInventario.classList.contains('active'));
+}
+
+function calcularEstadisticasDesdeArticulos(articulos) {
+    return articulos.reduce((stats, articulo) => {
+        stats.total += 1;
+        if (articulo.estado === 'En Bodega') stats.enBodega += 1;
+        if (articulo.estado === 'Entregado') stats.entregados += 1;
+        return stats;
+    }, { total: 0, enBodega: 0, entregados: 0 });
+}
+
+function actualizarResumenInventario(stats) {
+    const totalArticulos = document.getElementById('totalArticulos');
+    const enBodega = document.getElementById('enBodega');
+    const entregados = document.getElementById('entregados');
+
+    if (totalArticulos) totalArticulos.textContent = stats.total;
+    if (enBodega) enBodega.textContent = stats.enBodega;
+    if (entregados) entregados.textContent = stats.entregados;
+}
+
+function contarArticulosAntiguos(articulos) {
+    let cantidad = 0;
+    for (const articulo of articulos) {
+        if (articulo.estado !== 'En Bodega') continue;
+        try {
+            const dias = obtenerDiasEnBodega(articulo.fechaIngreso);
+            if (Number.isInteger(dias) && dias >= 30) {
+                cantidad += 1;
+            }
+        } catch (error) {
+            // Ignorar fechas inválidas en el conteo de alerta.
+        }
+    }
+    return cantidad;
+}
+
+function obtenerFiltroActualInventario() {
+    const filtro = document.getElementById('filtroEstado');
+    return filtro ? filtro.value : 'todos';
+}
+
+function filtrarArticulosPorEstado(articulos, filtro) {
+    if (filtro === 'bodega') {
+        return articulos.filter((articulo) => articulo.estado === 'En Bodega');
+    }
+    if (filtro === 'entregados') {
+        return articulos.filter((articulo) => articulo.estado === 'Entregado');
+    }
+    return articulos;
+}
+
+async function actualizarInventario(options = {}) {
+    const {
+        deferIfHidden = true,
+        force = false
+    } = options;
+
+    const visible = inventarioEstaVisible();
+    if (deferIfHidden && !force && !visible) {
+        inventarioDirty = true;
+        return { success: true, deferred: true };
+    }
+
+    if (inventarioRefreshInFlight) {
+        inventarioDirty = true;
+        return inventarioRefreshInFlight;
+    }
+
+    inventarioDirty = false;
+    inventarioRefreshInFlight = (async () => {
+        try {
+            const todosArticulos = await window.electronAPI.obtenerTodos();
+            inventarioCache = Array.isArray(todosArticulos) ? todosArticulos : [];
+            inventarioCacheCargado = true;
+
+            const visibleDespuesFetch = inventarioEstaVisible();
+            if (visibleDespuesFetch || force) {
+                const stats = calcularEstadisticasDesdeArticulos(inventarioCache);
+                actualizarResumenInventario(stats);
+                actualizarBadgeInventario(contarArticulosAntiguos(inventarioCache));
+            }
+
+            await aplicarFiltro({ useCache: true, skipIfHidden: true });
+            return { success: true };
+        } catch (error) {
+            console.error('Error actualizando inventario:', error);
+            mostrarNotificacion(`❌ Error al cargar el inventario: ${error.message}`, true);
+            return { success: false, error: error.message };
+        } finally {
+            inventarioRefreshInFlight = null;
+
+            if (inventarioDirty && inventarioEstaVisible()) {
+                inventarioDirty = false;
+                void actualizarInventario({ deferIfHidden: false });
+            }
+        }
+    })();
+
+    return inventarioRefreshInFlight;
 }
 
 function actualizarBadgeInventario(cantidad) {
@@ -61,23 +336,34 @@ function actualizarBadgeInventario(cantidad) {
     }
 }
 
-async function aplicarFiltro() {
-    try {
-        const filtro = document.getElementById('filtroEstado').value;
-        const todosArticulos = await window.electronAPI.obtenerTodos();
+async function aplicarFiltro(options = {}) {
+    const {
+        useCache = true,
+        skipIfHidden = false
+    } = options;
 
-        if (filtro === 'bodega') {
-            articulosFiltrados = todosArticulos.filter(a => a.estado === 'En Bodega');
-        } else if (filtro === 'entregados') {
-            articulosFiltrados = todosArticulos.filter(a => a.estado === 'Entregado');
-        } else {
-            articulosFiltrados = todosArticulos;
+    try {
+        if (!useCache || !inventarioCacheCargado) {
+            const todosArticulos = await window.electronAPI.obtenerTodos();
+            inventarioCache = Array.isArray(todosArticulos) ? todosArticulos : [];
+            inventarioCacheCargado = true;
+        }
+
+        if (skipIfHidden && !inventarioEstaVisible()) {
+            return;
+        }
+
+        const filtro = obtenerFiltroActualInventario();
+        articulosFiltrados = filtrarArticulosPorEstado(inventarioCache, filtro);
+
+        if (!inventarioEstaVisible()) {
+            return;
         }
 
         mostrarTabla(articulosFiltrados, 'tablaInventario');
     } catch (error) {
         console.error('Error aplicando filtro de inventario:', error);
-        mostrarNotificacion('❌ Error filtrando inventario', true);
+        mostrarNotificacion(`❌ Error filtrando inventario: ${error.message}`, true);
     }
 }
 
@@ -116,37 +402,29 @@ function mostrarTabla(datos, elementoId) {
     datos.forEach(art => {
         const claseAlerta = art.estado === 'En Bodega' ? obtenerClaseAlerta(art.fechaIngreso) : '';
         const diasEnBodega = art.estado === 'En Bodega' ? calcularDiasEnBodega(art.fechaIngreso) : '-';
+        const fechaIngresoTexto = formatearFechaChile(art.fechaIngreso);
         const numeroBodega = (typeof art.numeroBodega === 'string' && art.numeroBodega.trim())
             ? art.numeroBodega
             : 'Sin ubicación';
         const estadoPago = (typeof art.estadoPago === 'string' && art.estadoPago.trim())
             ? art.estadoPago
             : 'Sin pago';
-        const estadoPagoClase = estadoPago.toLowerCase().replace(/\s+/g, '');
+        const estadoPagoClase = obtenerClaseEstadoPago(estadoPago);
 
         html += `
-            <tr class="${claseAlerta}">
+            <tr class="${claseAlerta}" data-articulo-id="${art.id}" data-estado="${escaparHtml(art.estado)}">
                 <td><strong>${String(art.id).padStart(4, '0')}</strong></td>
                 <td>${escaparHtml(art.rut)}</td>
                 <td>${escaparHtml(art.nombreCliente)}</td>
                 <td>${escaparHtml(art.tipoArticulo)}</td>
                 <td><small>${escaparHtml(art.descripcion)}</small></td>
                 <td><strong style="color: var(--location-highlight);">${escaparHtml(numeroBodega)}</strong></td>
-                <td><small>${escaparHtml(art.fechaIngreso)}</small></td>
-                <td><strong class="${claseAlerta ? 'text-alerta' : ''}">${diasEnBodega}</strong></td>
-                <td><span class="status-badge ${art.estado === 'En Bodega' ? 'status-bodega' : 'status-entregado'}">${escaparHtml(art.estado)}</span></td>
-                <td><span class="estado-pago-badge estado-pago-${estadoPagoClase}">${escaparHtml(estadoPago)}</span></td>
+                <td><small>${escaparHtml(fechaIngresoTexto)}</small></td>
+                <td class="celda-tiempo"><strong class="${claseAlerta ? 'text-alerta' : ''}">${diasEnBodega}</strong></td>
+                <td class="estado-col celda-estado"><span class="status-badge ${art.estado === 'En Bodega' ? 'status-bodega' : 'status-entregado'}">${escaparHtml(art.estado)}</span></td>
+                <td class="estado-pago-col celda-estado-pago"><span class="estado-pago-badge estado-pago-${estadoPagoClase}">${escaparHtml(estadoPago)}</span></td>
                 <td><strong style="color: ${art.saldoPendiente > 0 ? 'var(--saldo-negative)' : 'var(--saldo-positive)'};">$${formatearMoneda(art.saldoPendiente)}</strong></td>
-                <td class="action-buttons">
-                    ${art.estado === 'En Bodega' ?
-                `<button class="btn btn-success btn-small" onclick="marcarEntregado(${art.id})">✓ Entregar</button>` :
-                `<button class="btn btn-warning btn-small" onclick="marcarEnBodega(${art.id})">↩ Devolver</button>`
-            }
-                    <button class="btn btn-info btn-small" onclick="mostrarModalPago(${art.id})">💰 Pagos</button>
-                    <button class="btn btn-secondary btn-small" onclick="verTicket(${art.id})" title="Ver Ticket">👁️</button>
-                    <button class="btn btn-primary btn-small" onclick="reimprimirTicket(${art.id})">🖨</button>
-                    <button class="btn btn-danger btn-small" onclick="eliminarArticulo(${art.id})">🗑</button>
-                </td>
+                <td class="action-buttons celda-acciones">${construirHtmlAccionesArticulo(art.id, art.estado)}</td>
             </tr>
         `;
     });
@@ -157,38 +435,45 @@ function mostrarTabla(datos, elementoId) {
 
 
 async function exportarDatos() {
-    const articulos = await window.electronAPI.obtenerTodos();
+    try {
+        const articulos = await window.electronAPI.obtenerTodos();
 
-    if (articulos.length === 0) {
-        mostrarNotificacion('No hay datos para exportar', true);
-        return;
+        if (articulos.length === 0) {
+            mostrarNotificacion('No hay datos para exportar', true);
+            return;
+        }
+
+        const escaparCsv = (texto) => {
+            if (!texto) return '';
+            const str = String(texto);
+            return str.replace(/"/g, '""').replace(/[\r\n]+/g, ' ');
+        };
+
+        let csv = 'ID,RUT,Cliente,Teléfono,Tipo,Descripción,Ubicación (opcional),Fecha Ingreso,Estado,Fecha Entrega,Observaciones,Valor Total,Total Abonado,Saldo Pendiente,Estado Pago\n';
+
+        articulos.forEach(art => {
+            const fechaIngresoExport = formatearFechaChileParaExport(art.fechaIngreso);
+            const fechaEntregaExport = formatearFechaChileParaExport(art.fechaEntrega);
+            csv += `${art.id},"${escaparCsv(art.rut)}","${escaparCsv(art.nombreCliente)}","${escaparCsv(art.telefono)}","${escaparCsv(art.tipoArticulo)}","${escaparCsv(art.descripcion)}","${escaparCsv(art.numeroBodega)}","${escaparCsv(fechaIngresoExport)}","${escaparCsv(art.estado)}","${escaparCsv(fechaEntregaExport)}","${escaparCsv(art.observaciones)}",${art.valorTotal},${art.totalAbonado},${art.saldoPendiente},"${escaparCsv(art.estadoPago)}"\n`;
+        });
+
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+
+        link.setAttribute('href', url);
+        link.setAttribute('download', `inventario_zapateria_${new Date().toISOString().split('T')[0]}.csv`);
+        link.style.visibility = 'hidden';
+
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        mostrarNotificacion('📥 Datos exportados correctamente');
+    } catch (error) {
+        console.error('Error exportando CSV de inventario:', error);
+        mostrarNotificacion(`❌ Error exportando CSV: ${error.message}`, true);
     }
-
-    const escaparCsv = (texto) => {
-        if (!texto) return '';
-        const str = String(texto);
-        return str.replace(/"/g, '""').replace(/[\r\n]+/g, ' ');
-    };
-
-    let csv = 'ID,RUT,Cliente,Teléfono,Tipo,Descripción,Ubicación (opcional),Fecha Ingreso,Estado,Fecha Entrega,Observaciones,Valor Total,Total Abonado,Saldo Pendiente,Estado Pago\n';
-
-    articulos.forEach(art => {
-        csv += `${art.id},"${escaparCsv(art.rut)}","${escaparCsv(art.nombreCliente)}","${escaparCsv(art.telefono)}","${escaparCsv(art.tipoArticulo)}","${escaparCsv(art.descripcion)}","${escaparCsv(art.numeroBodega)}","${escaparCsv(art.fechaIngreso)}","${escaparCsv(art.estado)}","${escaparCsv(art.fechaEntrega)}","${escaparCsv(art.observaciones)}",${art.valorTotal},${art.totalAbonado},${art.saldoPendiente},"${escaparCsv(art.estadoPago)}"\n`;
-    });
-
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-
-    link.setAttribute('href', url);
-    link.setAttribute('download', `inventario_zapateria_${new Date().toISOString().split('T')[0]}.csv`);
-    link.style.visibility = 'hidden';
-
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-
-    mostrarNotificacion('📥 Datos exportados correctamente');
 }
 
 async function migrarDesdeLocalStorage() {
@@ -199,7 +484,13 @@ async function migrarDesdeLocalStorage() {
         return;
     }
 
-    if (confirm('⚠️ ¿Desea migrar los datos desde LocalStorage a SQLite?\n\nEsto importará todos los artículos antiguos.')) {
+    const confirmacion = await confirmarAccionAsync({
+        titulo: 'Confirmar migración',
+        mensaje: '⚠️ ¿Desea migrar los datos desde LocalStorage a SQLite?\n\nEsto importará todos los artículos antiguos.',
+        confirmarTexto: 'Migrar',
+        peligro: true
+    });
+    if (confirmacion) {
         const resultado = await window.electronAPI.migrarDesdeLocalStorage(datosAntiguos);
 
         if (resultado.success) {

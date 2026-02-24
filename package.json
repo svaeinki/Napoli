@@ -1,12 +1,13 @@
 {
   "name": "napoli-reparadora",
-  "version": "2.0.6",
+  "version": "2.0.8",
   "description": "Sistema de gestión de bodega para Napoli - Reparadora de Calzado",
   "main": "main.js",
   "scripts": {
     "postinstall": "electron-rebuild -f -w better-sqlite3",
     "start": "node scripts/start-electron.js",
     "rebuild": "electron-rebuild",
+    "test": "node --test scripts/tests/*.test.js",
     "build": "electron-builder --win --mac --linux",
     "build-mac": "electron-builder --mac",
     "build-win": "electron-builder --win",

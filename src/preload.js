@@ -41,5 +41,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
     // Configuración
     obtenerConfiguracion: () => ipcRenderer.invoke('config:obtener'),
-    guardarConfiguracion: (config) => ipcRenderer.invoke('config:guardar', config)
+    guardarConfiguracion: (config) => ipcRenderer.invoke('config:guardar', config),
+
+    // Diagnóstico y runtime
+    diagEvent: (payload) => ipcRenderer.invoke('diag:event', payload),
+    obtenerRuntimeInfo: () => ipcRenderer.invoke('app:runtimeInfo')
 });

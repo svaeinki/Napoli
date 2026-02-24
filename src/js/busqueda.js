@@ -20,6 +20,6 @@ async function buscarArticulos() {
         }
     } catch (error) {
         console.error('Error buscando artículos:', error);
-        mostrarNotificacion('❌ Error realizando la búsqueda', true);
+        mostrarNotificacion(`❌ Error realizando la búsqueda: ${error.message}`, true);
     }
 }

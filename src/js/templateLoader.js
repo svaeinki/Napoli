@@ -24,7 +24,8 @@ async function cargarTodosLosTemplates() {
         cargarTemplate('html/tab-buscar.html', 'buscar'),
         cargarTemplate('html/tab-backup.html', 'backup'),
         cargarTemplate('html/ticket.html', 'ticketContainer'),
-        cargarTemplate('html/modal-pagos.html', 'modalContainer')
+        cargarTemplate('html/modal-pagos.html', 'modalContainer'),
+        cargarTemplate('html/modal-confirmacion.html', 'modalConfirmContainer')
     ];
 
     const resultados = await Promise.allSettled(cargas);

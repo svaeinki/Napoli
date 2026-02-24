@@ -1,5 +1,5 @@
 const Database = require('better-sqlite3');
-const path = require('path');
+const { normalizarFechaIngresoIso, normalizarFechaIsoChile } = require('./chile-date');
 
 /**
  * Sistema de Base de Datos para Napoli - Reparadora de Calzado
@@ -62,34 +62,162 @@ class DatabaseManager {
             );
         `);
 
-        // MIGRACIÓN: Agregar columnas de pago si no existen
+        // MIGRACIÓN: Agregar columnas de pago faltantes (idempotente)
         try {
-            // Verificar si las columnas existen
-            const tableInfo = this.db.prepare("PRAGMA table_info(articulos)").all();
-            const columnas = tableInfo.map(col => col.name);
-
-            // Agregar columnas nuevas si no existen
-            if (!columnas.includes('valorTotal')) {
-                console.log('📊 Migrando base de datos: agregando columnas de pago...');
-
-                this.db.exec(`
-                    ALTER TABLE articulos ADD COLUMN valorTotal REAL DEFAULT 0;
-                    ALTER TABLE articulos ADD COLUMN totalAbonado REAL DEFAULT 0;
-                    ALTER TABLE articulos ADD COLUMN saldoPendiente REAL DEFAULT 0;
-                    ALTER TABLE articulos ADD COLUMN estadoPago TEXT DEFAULT 'Sin pago' CHECK(estadoPago IN ('Sin pago', 'Abonado', 'Pagado'));
-                `);
-
-                console.log('✅ Migración completada: columnas de pago agregadas');
-            }
+            this.asegurarColumnasPago();
 
             // Migrar numeroBodega para que sea opcional (sin NOT NULL/UNIQUE)
             this.migrarNumeroBodegaOpcional();
+            this.migrarFechasIngresoChile();
+            this.migrarFechasEntregaChile();
         } catch (error) {
             console.error('Error en migración:', error);
             throw error;
         }
 
         console.log('✅ Tablas inicializadas correctamente');
+    }
+
+    obtenerColumnasArticulos() {
+        const tableInfo = this.db.prepare("PRAGMA table_info(articulos)").all();
+        return new Set(tableInfo.map(col => col.name));
+    }
+
+    asegurarColumnasPago() {
+        const columnasPago = [
+            {
+                nombre: 'valorTotal',
+                sql: 'ALTER TABLE articulos ADD COLUMN valorTotal REAL DEFAULT 0'
+            },
+            {
+                nombre: 'totalAbonado',
+                sql: 'ALTER TABLE articulos ADD COLUMN totalAbonado REAL DEFAULT 0'
+            },
+            {
+                nombre: 'saldoPendiente',
+                sql: 'ALTER TABLE articulos ADD COLUMN saldoPendiente REAL DEFAULT 0'
+            },
+            {
+                nombre: 'estadoPago',
+                sql: "ALTER TABLE articulos ADD COLUMN estadoPago TEXT DEFAULT 'Sin pago' CHECK(estadoPago IN ('Sin pago', 'Abonado', 'Pagado'))"
+            }
+        ];
+
+        const columnasActuales = this.obtenerColumnasArticulos();
+        const faltantes = columnasPago.filter((columna) => !columnasActuales.has(columna.nombre));
+
+        if (faltantes.length === 0) {
+            return;
+        }
+
+        console.log(`📊 Migrando base de datos: agregando columnas de pago faltantes (${faltantes.map(c => c.nombre).join(', ')})...`);
+        for (const columna of faltantes) {
+            this.db.exec(columna.sql);
+        }
+        console.log('✅ Migración completada: columnas de pago consistentes');
+    }
+
+    migrarFechasIngresoChile() {
+        const filas = this.db.prepare(`
+            SELECT id, fechaIngreso
+            FROM articulos
+            ORDER BY id ASC
+        `).all();
+
+        if (!Array.isArray(filas) || filas.length === 0) {
+            return;
+        }
+
+        const updates = [];
+        let invalidas = 0;
+
+        for (const fila of filas) {
+            const fechaNormalizada = normalizarFechaIngresoIso(fila.fechaIngreso, { fallbackNow: false });
+            if (!fechaNormalizada) {
+                invalidas++;
+                continue;
+            }
+
+            const fechaActual = typeof fila.fechaIngreso === 'string'
+                ? fila.fechaIngreso.trim()
+                : String(fila.fechaIngreso ?? '');
+
+            if (fechaActual !== fechaNormalizada) {
+                updates.push({ id: fila.id, fechaIngreso: fechaNormalizada });
+            }
+        }
+
+        if (updates.length > 0) {
+            const updateStmt = this.db.prepare(`
+                UPDATE articulos
+                SET fechaIngreso = ?
+                WHERE id = ?
+            `);
+            const aplicar = this.db.transaction(() => {
+                for (const fila of updates) {
+                    updateStmt.run(fila.fechaIngreso, fila.id);
+                }
+            });
+            aplicar();
+        }
+
+        if (updates.length > 0 || invalidas > 0) {
+            console.log(
+                `📊 Migración fechas ingreso: revisadas=${filas.length}, migradas=${updates.length}, inválidas=${invalidas}`
+            );
+        }
+    }
+
+    migrarFechasEntregaChile() {
+        const filas = this.db.prepare(`
+            SELECT id, fechaEntrega
+            FROM articulos
+            WHERE fechaEntrega IS NOT NULL
+            ORDER BY id ASC
+        `).all();
+
+        if (!Array.isArray(filas) || filas.length === 0) {
+            return;
+        }
+
+        const updates = [];
+        let invalidas = 0;
+
+        for (const fila of filas) {
+            const fechaNormalizada = normalizarFechaIsoChile(fila.fechaEntrega, { fallbackNow: false });
+            if (!fechaNormalizada) {
+                invalidas++;
+                continue;
+            }
+
+            const fechaActual = typeof fila.fechaEntrega === 'string'
+                ? fila.fechaEntrega.trim()
+                : String(fila.fechaEntrega ?? '');
+
+            if (fechaActual !== fechaNormalizada) {
+                updates.push({ id: fila.id, fechaEntrega: fechaNormalizada });
+            }
+        }
+
+        if (updates.length > 0) {
+            const updateStmt = this.db.prepare(`
+                UPDATE articulos
+                SET fechaEntrega = ?
+                WHERE id = ?
+            `);
+            const aplicar = this.db.transaction(() => {
+                for (const fila of updates) {
+                    updateStmt.run(fila.fechaEntrega, fila.id);
+                }
+            });
+            aplicar();
+        }
+
+        if (updates.length > 0 || invalidas > 0) {
+            console.log(
+                `📊 Migración fechas entrega: revisadas=${filas.length}, migradas=${updates.length}, inválidas=${invalidas}`
+            );
+        }
     }
 
     migrarNumeroBodegaOpcional() {
@@ -185,8 +313,8 @@ class DatabaseManager {
                 INSERT INTO articulos (
                     rut, nombreCliente, telefono, tipoArticulo, 
                     descripcion, numeroBodega, observaciones, 
-                    estado, fechaIngreso, valorTotal, saldoPendiente, estadoPago
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    estado, fechaIngreso, valorTotal, totalAbonado, saldoPendiente, estadoPago
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `),
 
             obtenerTodos: this.db.prepare(`
@@ -232,8 +360,57 @@ class DatabaseManager {
             registrarAuditoria: this.db.prepare(`
                 INSERT INTO auditoria (articuloId, accion, detalles)
                 VALUES (?, ?, ?)
+            `),
+
+            insertarAbono: this.db.prepare(`
+                INSERT INTO abonos (articuloId, monto, metodoPago, observaciones)
+                VALUES (?, ?, ?, ?)
+            `),
+
+            actualizarTotalesPorAbono: this.db.prepare(`
+                UPDATE articulos
+                SET totalAbonado = totalAbonado + ?,
+                    saldoPendiente = MAX(0, valorTotal - (totalAbonado + ?)),
+                    estadoPago = CASE
+                        WHEN (valorTotal - (totalAbonado + ?)) <= 0 THEN 'Pagado'
+                        WHEN (totalAbonado + ?) > 0 THEN 'Abonado'
+                        ELSE 'Sin pago'
+                    END,
+                    fechaModificacion = CURRENT_TIMESTAMP
+                WHERE id = ?
+            `),
+
+            obtenerAbonosArticulo: this.db.prepare(`
+                SELECT * FROM abonos
+                WHERE articuloId = ?
+                ORDER BY fecha DESC
+            `),
+
+            actualizarValorTotal: this.db.prepare(`
+                UPDATE articulos 
+                SET valorTotal = ?,
+                    saldoPendiente = MAX(0, ? - totalAbonado),
+                    estadoPago = CASE
+                        WHEN (? - totalAbonado) <= 0 THEN 'Pagado'
+                        WHEN totalAbonado > 0 THEN 'Abonado'
+                        ELSE 'Sin pago'
+                    END,
+                    fechaModificacion = CURRENT_TIMESTAMP
+                WHERE id = ?
             `)
         };
+    }
+
+    limpiarMetodoPago(metodoPago) {
+        return (typeof metodoPago === 'string' && metodoPago.trim())
+            ? metodoPago.trim().slice(0, 80)
+            : 'Efectivo';
+    }
+
+    limpiarObservacionesAbono(observaciones) {
+        return (typeof observaciones === 'string')
+            ? observaciones.trim().slice(0, 500)
+            : '';
     }
 
     // ============================================
@@ -242,32 +419,75 @@ class DatabaseManager {
 
     insertar(articulo) {
         try {
-            const valorTotal = articulo.valorTotal || 0;
-            const estadoPago = 'Sin pago';
+            const valorTotal = Number(articulo.valorTotal);
+            const valorTotalNum = Number.isFinite(valorTotal) && valorTotal >= 0 ? valorTotal : 0;
+            const abonoInicialInput = articulo.abonoInicial;
+            const abonoInicialRaw = (
+                abonoInicialInput === null ||
+                abonoInicialInput === undefined ||
+                String(abonoInicialInput).trim() === ''
+            )
+                ? 0
+                : Number(abonoInicialInput);
+            if (!Number.isFinite(abonoInicialRaw) || abonoInicialRaw < 0) {
+                return { success: false, error: 'El abono inicial debe ser un número mayor o igual a 0' };
+            }
+            const abonoInicial = abonoInicialRaw;
+            if (abonoInicial > valorTotalNum) {
+                return { success: false, error: 'El abono inicial no puede ser mayor al valor total' };
+            }
+
+            const metodoPagoInicial = this.limpiarMetodoPago(articulo.metodoPagoInicial);
+            const observacionesAbonoInicial = this.limpiarObservacionesAbono(
+                articulo.observacionesAbonoInicial || 'Abono inicial al ingresar'
+            );
             const numeroBodega = this.normalizarNumeroBodega(articulo.numeroBodega);
+            const fechaIngreso = normalizarFechaIngresoIso(articulo.fechaIngreso, { fallbackNow: true });
+            const totalAbonadoInicial = abonoInicial;
+            const saldoPendienteInicial = Math.max(0, valorTotalNum - totalAbonadoInicial);
+            const estadoPagoInicial = saldoPendienteInicial <= 0
+                ? 'Pagado'
+                : (totalAbonadoInicial > 0 ? 'Abonado' : 'Sin pago');
 
-            const result = this.statements.insertarArticulo.run(
-                articulo.rut,
-                articulo.nombreCliente,
-                articulo.telefono || null,
-                articulo.tipoArticulo,
-                articulo.descripcion,
-                numeroBodega,
-                articulo.observaciones || null,
-                articulo.estado || 'En Bodega',
-                articulo.fechaIngreso,
-                valorTotal,
-                valorTotal, // saldoPendiente inicial = valorTotal
-                estadoPago
-            );
+            let nuevoId = null;
+            const insertarTodo = this.db.transaction(() => {
+                const result = this.statements.insertarArticulo.run(
+                    articulo.rut,
+                    articulo.nombreCliente,
+                    articulo.telefono || null,
+                    articulo.tipoArticulo,
+                    articulo.descripcion,
+                    numeroBodega,
+                    articulo.observaciones || null,
+                    articulo.estado || 'En Bodega',
+                    fechaIngreso,
+                    valorTotalNum,
+                    totalAbonadoInicial,
+                    saldoPendienteInicial,
+                    estadoPagoInicial
+                );
 
-            this.statements.registrarAuditoria.run(
-                result.lastInsertRowid,
-                'INSERTAR',
-                `Artículo creado: ${numeroBodega || 'Sin ubicación'} - Valor: $${valorTotal}`
-            );
+                nuevoId = Number(result.lastInsertRowid);
 
-            return { success: true, id: result.lastInsertRowid };
+                if (abonoInicial > 0) {
+                    this.statements.insertarAbono.run(
+                        nuevoId,
+                        abonoInicial,
+                        metodoPagoInicial,
+                        observacionesAbonoInicial
+                    );
+                }
+
+                const detalleAbono = abonoInicial > 0 ? ` - Abono inicial: $${abonoInicial}` : '';
+                this.statements.registrarAuditoria.run(
+                    nuevoId,
+                    'INSERTAR',
+                    `Artículo creado: ${numeroBodega || 'Sin ubicación'} - Valor: $${valorTotalNum}${detalleAbono}`
+                );
+            });
+
+            insertarTodo();
+            return { success: true, id: nuevoId };
         } catch (error) {
             console.error('Error al insertar:', error);
             return { success: false, error: error.message };
@@ -279,7 +499,7 @@ class DatabaseManager {
             return this.statements.obtenerTodos.all();
         } catch (error) {
             console.error('Error al obtener artículos:', error);
-            return [];
+            throw error;
         }
     }
 
@@ -288,7 +508,7 @@ class DatabaseManager {
             return this.statements.obtenerPorId.get(id);
         } catch (error) {
             console.error('Error al obtener artículo:', error);
-            return null;
+            throw error;
         }
     }
 
@@ -305,25 +525,30 @@ class DatabaseManager {
             return this.statements.buscar.all(termino, patron, patron, patron, patron, patron);
         } catch (error) {
             console.error('Error al buscar:', error);
-            return [];
+            throw error;
         }
     }
 
     actualizarEstado(id, nuevoEstado) {
         try {
-            const fechaEntrega = nuevoEstado === 'Entregado' ?
-                new Date().toLocaleString('es-CL') : null;
+            const fechaEntrega = nuevoEstado === 'Entregado'
+                ? new Date().toISOString()
+                : null;
 
-            const result = this.statements.actualizarEstado.run(nuevoEstado, fechaEntrega, id);
-            if (result.changes === 0) {
-                return { success: false, error: 'Artículo no encontrado' };
-            }
+            const actualizar = this.db.transaction(() => {
+                const result = this.statements.actualizarEstado.run(nuevoEstado, fechaEntrega, id);
+                if (result.changes === 0) {
+                    throw new Error('Artículo no encontrado');
+                }
 
-            this.statements.registrarAuditoria.run(
-                id,
-                'ACTUALIZAR_ESTADO',
-                `Estado cambiado a: ${nuevoEstado}`
-            );
+                this.statements.registrarAuditoria.run(
+                    id,
+                    'ACTUALIZAR_ESTADO',
+                    `Estado cambiado a: ${nuevoEstado}`
+                );
+            });
+
+            actualizar();
 
             return { success: true };
         } catch (error) {
@@ -334,18 +559,22 @@ class DatabaseManager {
 
     eliminar(id) {
         try {
-            const articulo = this.statements.obtenerPorId.get(id);
-            if (!articulo) {
-                return { success: false, error: 'Artículo no encontrado' };
-            }
+            const eliminarArticulo = this.db.transaction(() => {
+                const articulo = this.statements.obtenerPorId.get(id);
+                if (!articulo) {
+                    throw new Error('Artículo no encontrado');
+                }
 
-            this.statements.registrarAuditoria.run(
-                id,
-                'ELIMINAR',
-                `Artículo eliminado: ${articulo.numeroBodega || 'Sin ubicación'}`
-            );
+                this.statements.registrarAuditoria.run(
+                    id,
+                    'ELIMINAR',
+                    `Artículo eliminado: ${articulo.numeroBodega || 'Sin ubicación'}`
+                );
 
-            this.statements.eliminar.run(id);
+                this.statements.eliminar.run(id);
+            });
+
+            eliminarArticulo();
             return { success: true };
         } catch (error) {
             console.error('Error al eliminar:', error);
@@ -358,7 +587,7 @@ class DatabaseManager {
             return this.statements.estadisticas.get();
         } catch (error) {
             console.error('Error al obtener estadísticas:', error);
-            return { total: 0, enBodega: 0, entregados: 0 };
+            throw error;
         }
     }
 
@@ -383,35 +612,19 @@ class DatabaseManager {
                 return { success: false, error: 'Artículo no encontrado' };
             }
 
-            const metodoPagoLimpio = (typeof metodoPago === 'string' && metodoPago.trim())
-                ? metodoPago.trim().slice(0, 80)
-                : 'Efectivo';
-            const observacionesLimpias = (typeof observaciones === 'string')
-                ? observaciones.trim().slice(0, 500)
-                : '';
-
-            const insertAbono = this.db.prepare(`
-                INSERT INTO abonos (articuloId, monto, metodoPago, observaciones)
-                VALUES (?, ?, ?, ?)
-            `);
-
-            const actualizarTotales = this.db.prepare(`
-                UPDATE articulos
-                SET totalAbonado = totalAbonado + ?,
-                    saldoPendiente = MAX(0, valorTotal - (totalAbonado + ?)),
-                    estadoPago = CASE
-                        WHEN (valorTotal - (totalAbonado + ?)) <= 0 THEN 'Pagado'
-                        WHEN (totalAbonado + ?) > 0 THEN 'Abonado'
-                        ELSE 'Sin pago'
-                    END,
-                    fechaModificacion = CURRENT_TIMESTAMP
-                WHERE id = ?
-            `);
+            const metodoPagoLimpio = this.limpiarMetodoPago(metodoPago);
+            const observacionesLimpias = this.limpiarObservacionesAbono(observaciones);
 
             // Ejecutar todo dentro de una transacción
             const registrar = this.db.transaction(() => {
-                insertAbono.run(articuloIdNum, montoNum, metodoPagoLimpio, observacionesLimpias);
-                const result = actualizarTotales.run(montoNum, montoNum, montoNum, montoNum, articuloIdNum);
+                this.statements.insertarAbono.run(articuloIdNum, montoNum, metodoPagoLimpio, observacionesLimpias);
+                const result = this.statements.actualizarTotalesPorAbono.run(
+                    montoNum,
+                    montoNum,
+                    montoNum,
+                    montoNum,
+                    articuloIdNum
+                );
                 if (result.changes === 0) {
                     throw new Error('Artículo no encontrado');
                 }
@@ -434,16 +647,10 @@ class DatabaseManager {
 
     obtenerAbonosArticulo(articuloId) {
         try {
-            const getAbonos = this.db.prepare(`
-                SELECT * FROM abonos 
-                WHERE articuloId = ? 
-                ORDER BY fecha DESC
-            `);
-
-            return getAbonos.all(articuloId);
+            return this.statements.obtenerAbonosArticulo.all(articuloId);
         } catch (error) {
             console.error('Error al obtener abonos:', error);
-            return [];
+            throw error;
         }
     }
 
@@ -458,29 +665,25 @@ class DatabaseManager {
                 return { success: false, error: 'Nuevo valor inválido' };
             }
 
-            const actualizar = this.db.prepare(`
-                UPDATE articulos 
-                SET valorTotal = ?,
-                    saldoPendiente = MAX(0, ? - totalAbonado),
-                    estadoPago = CASE
-                        WHEN (? - totalAbonado) <= 0 THEN 'Pagado'
-                        WHEN totalAbonado > 0 THEN 'Abonado'
-                        ELSE 'Sin pago'
-                    END,
-                    fechaModificacion = CURRENT_TIMESTAMP
-                WHERE id = ?
-            `);
+            const actualizarValor = this.db.transaction(() => {
+                const result = this.statements.actualizarValorTotal.run(
+                    nuevoValorNum,
+                    nuevoValorNum,
+                    nuevoValorNum,
+                    articuloIdNum
+                );
+                if (result.changes === 0) {
+                    throw new Error('Artículo no encontrado');
+                }
 
-            const result = actualizar.run(nuevoValorNum, nuevoValorNum, nuevoValorNum, articuloIdNum);
-            if (result.changes === 0) {
-                return { success: false, error: 'Artículo no encontrado' };
-            }
+                this.statements.registrarAuditoria.run(
+                    articuloIdNum,
+                    'ACTUALIZAR_VALOR',
+                    `Valor total actualizado a: $${nuevoValorNum}`
+                );
+            });
 
-            this.statements.registrarAuditoria.run(
-                articuloIdNum,
-                'ACTUALIZAR_VALOR',
-                `Valor total actualizado a: $${nuevoValorNum}`
-            );
+            actualizarValor();
 
             return { success: true };
         } catch (error) {
@@ -521,9 +724,7 @@ class DatabaseManager {
                         const nombreCliente = typeof articulo.nombreCliente === 'string' ? articulo.nombreCliente.trim() : '';
                         const tipoArticulo = typeof articulo.tipoArticulo === 'string' ? articulo.tipoArticulo.trim() : '';
                         const descripcion = typeof articulo.descripcion === 'string' ? articulo.descripcion.trim() : '';
-                        const fechaIngreso = (typeof articulo.fechaIngreso === 'string' && articulo.fechaIngreso.trim())
-                            ? articulo.fechaIngreso.trim()
-                            : new Date().toISOString();
+                        const fechaIngreso = normalizarFechaIngresoIso(articulo.fechaIngreso, { fallbackNow: true });
                         const estado = articulo.estado === 'Entregado' ? 'Entregado' : 'En Bodega';
 
                         if (!rut || !nombreCliente || !tipoArticulo || !descripcion) {
@@ -542,6 +743,7 @@ class DatabaseManager {
                             estado,
                             fechaIngreso,
                             0, // valorTotal
+                            0, // totalAbonado
                             0, // saldoPendiente
                             'Sin pago' // estadoPago
                         );

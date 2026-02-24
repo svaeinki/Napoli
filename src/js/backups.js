@@ -5,10 +5,7 @@
 let backupSeleccionadoPath = '';
 
 function formatearFechaHora(fechaIso) {
-    if (!fechaIso) return 'N/A';
-    const fecha = new Date(fechaIso);
-    if (Number.isNaN(fecha.getTime())) return 'N/A';
-    return fecha.toLocaleString('es-CL');
+    return formatearFechaChile(fechaIso, { fallback: 'N/A' });
 }
 
 function setRestoreStatus(mensajeHtml, tipo = 'warning') {
@@ -118,7 +115,7 @@ async function refrescarChecklistActualizacion() {
         }
     } catch (error) {
         console.error('Error refrescando checklist de actualización:', error);
-        actualizarChecklistResumen('Error verificando checklist de actualización.');
+        actualizarChecklistResumen(`Error verificando checklist de actualización: ${error.message}`);
     }
 }
 
@@ -191,7 +188,7 @@ async function seleccionarBackupParaRestore() {
         );
     } catch (error) {
         console.error('Error seleccionando backup para restore:', error);
-        mostrarNotificacion('❌ Error seleccionando archivo de backup', true);
+        mostrarNotificacion(`❌ Error seleccionando archivo de backup: ${error.message}`, true);
     }
 }
 
@@ -251,7 +248,7 @@ async function validarBackupSeleccionado() {
             `<strong>❌ Error validando backup</strong><br>${escaparHtml(error.message)}`,
             'error'
         );
-        mostrarNotificacion('❌ Error validando backup', true);
+        mostrarNotificacion(`❌ Error validando backup: ${error.message}`, true);
     }
 }
 
@@ -261,10 +258,14 @@ async function restaurarBackupSeleccionado() {
         return;
     }
 
-    const confirmacion = confirm(
-        `⚠️ Restaurarás la base actual desde este backup:\n\n${backupSeleccionadoPath}\n\n` +
-        'Se creará un snapshot previo y se intentará rollback automático si hay error.\n\n¿Continuar?'
-    );
+    const confirmacion = await confirmarAccionAsync({
+        titulo: 'Confirmar restauración de backup',
+        mensaje:
+            `⚠️ Restaurarás la base actual desde este backup:\n\n${backupSeleccionadoPath}\n\n` +
+            'Se creará un snapshot previo y se intentará rollback automático si hay error.\n\n¿Continuar?',
+        confirmarTexto: 'Restaurar',
+        peligro: true
+    });
     if (!confirmacion) {
         return;
     }
@@ -318,7 +319,7 @@ async function restaurarBackupSeleccionado() {
             `<strong>❌ Error restaurando backup</strong><br>${escaparHtml(error.message)}`,
             'error'
         );
-        mostrarNotificacion('❌ Error restaurando backup', true);
+        mostrarNotificacion(`❌ Error restaurando backup: ${error.message}`, true);
     }
 }
 
@@ -420,7 +421,13 @@ async function configurarDropbox() {
 }
 
 async function desconectarDropbox() {
-    if (confirm('¿Desea desconectar Dropbox?')) {
+    const confirmado = await confirmarAccionAsync({
+        titulo: 'Confirmar desconexión',
+        mensaje: '¿Desea desconectar Dropbox?',
+        confirmarTexto: 'Desconectar',
+        peligro: false
+    });
+    if (confirmado) {
         await window.electronAPI.dropboxDesconectar();
         mostrarNotificacion('✅ Dropbox desconectado');
         await verificarDropbox();
@@ -439,7 +446,8 @@ async function listarBackupsDropbox() {
         } else {
             let html = '<h4>Archivos en Dropbox:</h4><ul>';
             resultado.archivos.forEach(archivo => {
-                html += `<li>${escaparHtml(archivo.name)} (${new Date(archivo.client_modified).toLocaleString('es-CL')})</li>`;
+                const fechaArchivo = formatearFechaChile(archivo.client_modified, { fallback: 'N/A' });
+                html += `<li>${escaparHtml(archivo.name)} (${escaparHtml(fechaArchivo)})</li>`;
             });
             html += '</ul>';
             lista.innerHTML = html;
@@ -450,7 +458,13 @@ async function listarBackupsDropbox() {
 }
 
 async function subirBackupDropboxAhora() {
-    if (confirm('¿Deseas crear un backup y subirlo a Dropbox inmediatamente?')) {
+    const confirmado = await confirmarAccionAsync({
+        titulo: 'Confirmar backup inmediato',
+        mensaje: '¿Deseas crear un backup y subirlo a Dropbox inmediatamente?',
+        confirmarTexto: 'Crear y subir',
+        peligro: false
+    });
+    if (confirmado) {
         mostrarNotificacion('⏳ Creando y subiendo backup...', false);
 
         const resultado = await window.electronAPI.dropboxSubirBackupAhora();
