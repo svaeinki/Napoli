@@ -52,7 +52,7 @@
     }
 
     #ticketContainer .ticket-content.width-58mm {
-        margin-bottom: calc(0mm - var(--ticket-final-trim-mm, 0mm));
+        margin-bottom: calc(0mm - var(--ticket-final-trim-mm, 0mm) - var(--ticket-primer-height-mm, 0mm));
         box-sizing: border-box;
     }
 }
@@ -82,9 +82,23 @@
 .ticket-header {
     text-align: center;
     border-bottom: 2px dashed black;
-    padding-top: 2px;       /* La compensación superior fija la define tickets.js (SAFE_TOP_COMPENSATION_58MM). */
+    padding-top: 2px;       /* La protección superior se maneja con ticket-top-primer desde tickets.js. */
     padding-bottom: 8px;
     margin-bottom: 8px;
+}
+
+.ticket-top-primer {
+    display: block;
+    width: 100%;
+    height: var(--ticket-primer-height-mm, 0mm);
+    overflow: hidden;
+}
+
+.ticket-top-primer-line {
+    font-size: 9px;
+    line-height: 1;
+    letter-spacing: 0.2px;
+    white-space: nowrap;
 }
 
 .ticket-header h2 {

@@ -8,7 +8,8 @@ const CONFIG_IMPRESION_DEFAULT = {
     header: 'NAPOLI\nReparadora de Calzado',
     footer: 'Gracias por preferir Napoli\nConserve este ticket'
 };
-const SAFE_TOP_COMPENSATION_58MM = 12;
+const TOP_PRIMER_HEIGHT_58MM = 5;
+const TOP_PRIMER_LINE = '##############################';
 
 function textoConDefault(texto, fallback) {
     if (typeof texto !== 'string') return fallback;
@@ -95,16 +96,20 @@ const Tickets = {
             ? `ticket-content ${widthClass} ${fontProfileClass}`
             : `ticket-content ${widthClass}`;
         const ticketInlineStyle = widthClass === 'width-58mm'
-            ? ` style="--ticket-content-width-mm: ${contentWidth58mm}mm; --ticket-final-trim-mm: ${finalTrim58mm}mm; padding-top: ${SAFE_TOP_COMPENSATION_58MM}mm;"`
+            ? ` style="--ticket-content-width-mm: ${contentWidth58mm}mm; --ticket-final-trim-mm: ${finalTrim58mm}mm; --ticket-primer-height-mm: ${TOP_PRIMER_HEIGHT_58MM}mm;"`
             : '';
 
         // Formatear textos
         const headerHtml = escaparHtml(String(configEfectiva.header || '')).replace(/\n/g, '<br>');
+        const topPrimerHtml = widthClass === 'width-58mm'
+            ? `<div class="ticket-top-primer" aria-hidden="true" role="presentation">${Array.from({ length: 8 }, () => `<div class="ticket-top-primer-line">${TOP_PRIMER_LINE}</div>`).join('')}</div>`
+            : '';
         const footerHtml = escaparHtml(String(configEfectiva.footer || '')).replace(/\n/g, '<br>');
         const numeroBodega = typeof articulo.numeroBodega === 'string' ? articulo.numeroBodega.trim() : '';
 
         return `
             <div class="${ticketClassName}"${ticketInlineStyle}>
+                ${topPrimerHtml}
                 <div class="ticket-main">
                     <div class="ticket-header">
                         ${headerHtml}
