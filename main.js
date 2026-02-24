@@ -19,6 +19,17 @@ const DROPBOX_UPLOAD_TIMEOUT_MS = 12000;
 const REQUIRED_BACKUP_TABLES = ['articulos', 'abonos', 'auditoria'];
 const RESTORE_BUSY_MESSAGE = 'Restauración en curso. Intente nuevamente al terminar.';
 const WARNING_TOKEN_NO_CIFRADO = 'Tu sistema no permite cifrado local del token de Dropbox; se guardará sin cifrar en este equipo.';
+const PRINTER_CONFIG_DEFAULTS = Object.freeze({
+    width: '58mm',
+    fontProfile58: 'legible',
+    contentWidth58mm: 48,
+    verticalShift58mm: 15,
+    topOffset58mm: 15,
+    finalTrim58mm: 0,
+    driverCompatAnchor58: true,
+    header: 'NAPOLI\nReparadora de Calzado',
+    footer: 'Gracias por preferir Napoli\nConserve este ticket'
+});
 let restauracionEnCurso = false;
 
 // Crear carpeta de backups si no existe
@@ -376,12 +387,75 @@ function cargarConfiguracion() {
     try {
         if (fs.existsSync(CONFIG_PATH)) {
             const config = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
+            let configModificada = false;
+
+            if (!config || typeof config !== 'object') {
+                const configPorDefecto = { printer: { ...PRINTER_CONFIG_DEFAULTS } };
+                guardarConfiguracion(configPorDefecto);
+                return configPorDefecto;
+            }
+
+            if (!config.printer || typeof config.printer !== 'object') {
+                config.printer = {};
+                configModificada = true;
+            }
+
+            // Migración v1: verticalShift58mm era inefectivo (Electron margin anulado por @page CSS).
+            // Ahora funciona via CSS var — bumpeamos valores bajos a un default seguro.
+            if (
+                config.printer &&
+                !config._migrated_verticalShift_v1 &&
+                typeof config.printer.verticalShift58mm === 'number' &&
+                config.printer.verticalShift58mm < 8
+            ) {
+                config.printer.verticalShift58mm = 10;
+                config._migrated_verticalShift_v1 = true;
+                configModificada = true;
+            }
+            // Migración v2: offset ahora es inline style directo (eliminado doble mecanismo Electron margin).
+            // Default bumpeado a 15 mm para cubrir impresoras con mayor distancia cabezal→sierra.
+            if (
+                config.printer &&
+                !config._migrated_verticalShift_v2 &&
+                typeof config.printer.verticalShift58mm === 'number' &&
+                config.printer.verticalShift58mm < 12
+            ) {
+                config.printer.verticalShift58mm = 15;
+                config._migrated_verticalShift_v2 = true;
+                configModificada = true;
+            }
+            // Migración v3: endurece mínimo operativo del offset para evitar recorte superior.
+            if (
+                config.printer &&
+                !config._migrated_verticalShift_v3 &&
+                Number.isFinite(Number(config.printer.verticalShift58mm)) &&
+                Number(config.printer.verticalShift58mm) < 8
+            ) {
+                config.printer.verticalShift58mm = 15;
+                config._migrated_verticalShift_v3 = true;
+                configModificada = true;
+            }
+
+            const printerNormalizado = sanitizarConfigImpresora(config.printer || {});
+            const printerCompleto = { ...PRINTER_CONFIG_DEFAULTS, ...printerNormalizado };
+            const printerAnterior = JSON.stringify(config.printer);
+            const printerNuevo = JSON.stringify(printerCompleto);
+            if (printerAnterior !== printerNuevo) {
+                config.printer = printerCompleto;
+                configModificada = true;
+            }
+
+            if (configModificada) {
+                guardarConfiguracion(config);
+            }
             return config;
         }
     } catch (error) {
         console.error('Error cargando configuración:', error);
     }
-    return {};
+    const configInicial = { printer: { ...PRINTER_CONFIG_DEFAULTS } };
+    guardarConfiguracion(configInicial);
+    return configInicial;
 }
 
 // Guardar configuración
@@ -419,35 +493,53 @@ function descifrarToken(tokenCifrado) {
 function sanitizarConfigImpresora(printerConfig = {}) {
     const widthsPermitidos = new Set(['58mm', '80mm']);
     const perfilesPermitidos = new Set(['compacto', 'legible', 'extra_grande']);
-    const sanitizarCalibracion58mm = (valor, fallback, max = 8) => {
+    const sanitizarCalibracion58mm = (valor, fallback, min = 0, max = 8) => {
         const parsed = Number(valor);
         const fallbackNumber = Number(fallback);
         const fallbackSanitizado = Number.isFinite(fallbackNumber)
-            ? Math.min(max, Math.max(0, fallbackNumber))
-            : 0;
+            ? Math.min(max, Math.max(min, fallbackNumber))
+            : min;
         if (!Number.isFinite(parsed)) return fallbackSanitizado;
-        const clamped = Math.min(max, Math.max(0, parsed));
+        const clamped = Math.min(max, Math.max(min, parsed));
         return Math.round(clamped * 2) / 2;
     };
-    const width = widthsPermitidos.has(printerConfig.width) ? printerConfig.width : '58mm';
+    const width = widthsPermitidos.has(printerConfig.width)
+        ? printerConfig.width
+        : PRINTER_CONFIG_DEFAULTS.width;
     const fontProfileRaw = typeof printerConfig.fontProfile58 === 'string'
         ? printerConfig.fontProfile58.trim().toLowerCase()
         : '';
-    const fontProfile58 = perfilesPermitidos.has(fontProfileRaw) ? fontProfileRaw : 'legible';
+    const fontProfile58 = perfilesPermitidos.has(fontProfileRaw)
+        ? fontProfileRaw
+        : PRINTER_CONFIG_DEFAULTS.fontProfile58;
     const contentWidthRaw = Number(printerConfig.contentWidth58mm);
     const contentWidth58mm = Number.isFinite(contentWidthRaw)
         ? Math.min(54, Math.max(44, contentWidthRaw))
-        : 48;
+        : PRINTER_CONFIG_DEFAULTS.contentWidth58mm;
     const verticalShiftRaw = Number.isFinite(Number(printerConfig.verticalShift58mm))
         ? printerConfig.verticalShift58mm
         : printerConfig.topOffset58mm;
-    const verticalShift58mm = sanitizarCalibracion58mm(verticalShiftRaw, 2, 20);
-    const finalTrim58mm = sanitizarCalibracion58mm(printerConfig.finalTrim58mm, 0, 8);
+    const verticalShift58mm = sanitizarCalibracion58mm(
+        verticalShiftRaw,
+        PRINTER_CONFIG_DEFAULTS.verticalShift58mm,
+        8,
+        35
+    );
+    const finalTrim58mm = sanitizarCalibracion58mm(
+        printerConfig.finalTrim58mm,
+        PRINTER_CONFIG_DEFAULTS.finalTrim58mm,
+        0,
+        8
+    );
     const driverCompatAnchor58 = typeof printerConfig.driverCompatAnchor58 === 'boolean'
         ? printerConfig.driverCompatAnchor58
-        : true;
-    const header = typeof printerConfig.header === 'string' ? printerConfig.header.slice(0, 500) : '';
-    const footer = typeof printerConfig.footer === 'string' ? printerConfig.footer.slice(0, 500) : '';
+        : PRINTER_CONFIG_DEFAULTS.driverCompatAnchor58;
+    const header = typeof printerConfig.header === 'string' && printerConfig.header.trim()
+        ? printerConfig.header.slice(0, 500)
+        : PRINTER_CONFIG_DEFAULTS.header;
+    const footer = typeof printerConfig.footer === 'string' && printerConfig.footer.trim()
+        ? printerConfig.footer.slice(0, 500)
+        : PRINTER_CONFIG_DEFAULTS.footer;
     return {
         width,
         header,
@@ -1159,26 +1251,10 @@ ipcMain.handle('imprimir', async (event, opciones = {}) => {
         const widthFinal = widthsPermitidos.has(widthSolicitado)
             ? widthSolicitado
             : printerConfig.width;
-        const verticalShiftSolicitado = Number(opciones.verticalShiftMm);
-        const verticalShiftBase = Number.isFinite(verticalShiftSolicitado)
-            ? verticalShiftSolicitado
-            : Number(printerConfig.verticalShift58mm);
-        const verticalShiftMm = Number.isFinite(verticalShiftBase)
-            ? Math.min(20, Math.max(0, verticalShiftBase))
-            : 0;
-        const verticalShiftPx = Math.round((verticalShiftMm * 96) / 25.4);
         const printOptions = {
             silent: false,
             printBackground: false,
-            margins: widthFinal === '58mm'
-                ? {
-                    marginType: 'custom',
-                    top: verticalShiftPx,
-                    bottom: 0,
-                    left: 0,
-                    right: 0
-                }
-                : { marginType: 'none' }
+            margins: { marginType: 'none' }
         };
 
         await new Promise((resolve, reject) => {

@@ -2,12 +2,13 @@ const CONFIG_IMPRESION_DEFAULT = {
     width: '58mm', // '58mm' o '80mm'
     fontProfile58: 'legible', // compacto | legible | extra_grande
     contentWidth58mm: 48,
-    verticalShift58mm: 2,
+    verticalShift58mm: 15,
     finalTrim58mm: 0,
     driverCompatAnchor58: true,
     header: 'NAPOLI\nReparadora de Calzado',
     footer: 'Gracias por preferir Napoli\nConserve este ticket'
 };
+const SAFE_TOP_COMPENSATION_58MM = 12;
 
 function textoConDefault(texto, fallback) {
     if (typeof texto !== 'string') return fallback;
@@ -26,14 +27,14 @@ function contentWidth58ConDefault(valor, fallback = CONFIG_IMPRESION_DEFAULT.con
     return Math.min(54, Math.max(44, parsed));
 }
 
-function calibracion58ConDefault(valor, fallback, max = 8) {
+function calibracion58ConDefault(valor, fallback, min = 0, max = 8) {
     const parsed = Number(valor);
     const fallbackNumber = Number(fallback);
     const fallbackSanitizado = Number.isFinite(fallbackNumber)
-        ? Math.min(max, Math.max(0, fallbackNumber))
-        : 0;
+        ? Math.min(max, Math.max(min, fallbackNumber))
+        : min;
     if (!Number.isFinite(parsed)) return fallbackSanitizado;
-    const clamped = Math.min(max, Math.max(0, parsed));
+    const clamped = Math.min(max, Math.max(min, parsed));
     return Math.round(clamped * 2) / 2;
 }
 
@@ -51,8 +52,8 @@ function normalizarConfigImpresion(config, fallback = CONFIG_IMPRESION_DEFAULT) 
         width,
         fontProfile58: perfil58ConDefault(origen.fontProfile58, fallback.fontProfile58),
         contentWidth58mm: contentWidth58ConDefault(origen.contentWidth58mm, fallback.contentWidth58mm),
-        verticalShift58mm: calibracion58ConDefault(verticalShiftRaw, fallback.verticalShift58mm, 20),
-        finalTrim58mm: calibracion58ConDefault(origen.finalTrim58mm, fallback.finalTrim58mm, 8),
+        verticalShift58mm: calibracion58ConDefault(verticalShiftRaw, fallback.verticalShift58mm, 8, 35),
+        finalTrim58mm: calibracion58ConDefault(origen.finalTrim58mm, fallback.finalTrim58mm, 0, 8),
         driverCompatAnchor58,
         header: textoConDefault(origen.header, fallback.header),
         footer: textoConDefault(origen.footer, fallback.footer)
@@ -84,6 +85,7 @@ const Tickets = {
         const finalTrim58mm = calibracion58ConDefault(
             configEfectiva.finalTrim58mm,
             CONFIG_IMPRESION_DEFAULT.finalTrim58mm,
+            0,
             8
         );
         const fontProfileClass = widthClass === 'width-58mm'
@@ -93,7 +95,7 @@ const Tickets = {
             ? `ticket-content ${widthClass} ${fontProfileClass}`
             : `ticket-content ${widthClass}`;
         const ticketInlineStyle = widthClass === 'width-58mm'
-            ? ` style="--ticket-content-width-mm: ${contentWidth58mm}mm; --ticket-final-trim-mm: ${finalTrim58mm}mm;"`
+            ? ` style="--ticket-content-width-mm: ${contentWidth58mm}mm; --ticket-final-trim-mm: ${finalTrim58mm}mm; padding-top: ${SAFE_TOP_COMPENSATION_58MM}mm;"`
             : '';
 
         // Formatear textos
