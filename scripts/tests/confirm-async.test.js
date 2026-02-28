@@ -40,7 +40,11 @@ test('confirmarAccionAsync usa modal async cuando está disponible', async () =>
 
     const modal = {
         style: { display: 'none' },
-        addEventListener: () => {},
+        addEventListener: (eventName, handler, options) => {
+            if (options && options.signal) {
+                options.signal.addEventListener('abort', () => {});
+            }
+        },
         removeEventListener: () => {}
     };
     const titulo = { textContent: '' };
@@ -58,8 +62,13 @@ test('confirmarAccionAsync usa modal async cuando está disponible', async () =>
         document: {
             querySelector: () => null,
             getElementById: (id) => elements[id] || null,
-            addEventListener: (eventName, handler) => {
+            addEventListener: (eventName, handler, options) => {
                 handlersDocumento[eventName] = handler;
+                if (options && options.signal) {
+                    options.signal.addEventListener('abort', () => {
+                        delete handlersDocumento[eventName];
+                    });
+                }
             },
             removeEventListener: (eventName) => {
                 delete handlersDocumento[eventName];
@@ -74,6 +83,7 @@ test('confirmarAccionAsync usa modal async cuando está disponible', async () =>
             confirmCalls += 1;
             return true;
         },
+        AbortController,
         requestAnimationFrame: (callback) => callback(),
         setTimeout: (callback) => callback(),
         console

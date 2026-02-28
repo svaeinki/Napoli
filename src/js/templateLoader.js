@@ -36,8 +36,6 @@ async function cargarTodosLosTemplates() {
     if (errores.length > 0) {
         throw new Error(`Falló la carga de templates: ${errores.join(' | ')}`);
     }
-    
-    console.log('✅ Todos los templates cargados');
 }
 
 // Promesa global para que otros módulos esperen a que los templates estén listos

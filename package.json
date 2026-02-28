@@ -1,6 +1,6 @@
 {
   "name": "napoli-reparadora",
-  "version": "2.0.8",
+  "version": "2.0.9",
   "description": "Sistema de gestión de bodega para Napoli - Reparadora de Calzado",
   "main": "main.js",
   "scripts": {
@@ -28,6 +28,10 @@
   ],
   "author": "Diego Moreno",
   "license": "MIT",
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
+  },
   "devDependencies": {
     "@electron/rebuild": "^4.0.3",
     "electron": "^40.6.0",

@@ -327,27 +327,20 @@ async function restaurarBackupSeleccionado() {
 }
 
 async function verificarDropbox() {
-    console.log('🔍 Iniciando verificación de Dropbox...');
-
     const statusElement = document.getElementById('dropboxStatus');
     const configSection = document.getElementById('dropboxConfig');
     const actionsElement = document.getElementById('dropboxActions');
 
     if (!statusElement) {
-        console.error('❌ No se encontró el elemento dropboxStatus');
         return;
     }
 
     try {
         statusElement.innerHTML = '<span>🔄 Verificando conexión...</span>';
 
-        console.log('📡 Consultando si Dropbox está configurado...');
         const configurado = await window.electronAPI.dropboxEstaConfigurado();
-        console.log('📊 Resultado configurado:', configurado);
 
         if (configurado) {
-            console.log('✅ Dropbox configurado, verificando conexión...');
-
             const timeoutPromise = new Promise((_, reject) =>
                 setTimeout(() => reject(new Error('Timeout local')), 8000)
             );
@@ -355,10 +348,8 @@ async function verificarDropbox() {
             const verifyPromise = window.electronAPI.dropboxVerificar();
 
             const info = await Promise.race([verifyPromise, timeoutPromise]);
-            console.log('📊 Resultado verificación:', info);
 
             if (info.success) {
-                console.log('✅ Conexión exitosa:', info.usuario);
                 statusElement.innerHTML = `
                     <span class="status-connected">✅ Conectado</span>
                     <span>Usuario: ${escaparHtml(info.usuario)}</span>
@@ -366,19 +357,17 @@ async function verificarDropbox() {
                 if (configSection) configSection.style.display = 'none';
                 if (actionsElement) actionsElement.style.display = 'block';
             } else {
-                console.warn('⚠️ Error de conexión:', info.error);
                 statusElement.innerHTML = `<span class="status-disconnected">❌ ${escaparHtml(info.error)}</span>`;
                 if (configSection) configSection.style.display = 'block';
                 if (actionsElement) actionsElement.style.display = 'none';
             }
         } else {
-            console.log('⚠️ Dropbox no está configurado');
             statusElement.innerHTML = `<span class="status-disconnected">❌ No conectado</span>`;
             if (configSection) configSection.style.display = 'block';
             if (actionsElement) actionsElement.style.display = 'none';
         }
     } catch (error) {
-        console.error('❌ Error al verificar Dropbox:', error);
+        console.error('Error al verificar Dropbox:', error);
 
         if (error.message === 'Timeout local') {
             statusElement.innerHTML = '<span class="status-disconnected">❌ Timeout: Verifica tu conexión a internet</span>';
@@ -391,7 +380,6 @@ async function verificarDropbox() {
     }
 
     await refrescarChecklistActualizacion();
-    console.log('✅ Verificación de Dropbox completada');
 }
 
 async function configurarDropbox() {

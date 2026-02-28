@@ -97,8 +97,11 @@ async function ingresarArticulo(e) {
 
         const ticketGenerado = await generarTicket(articuloCompleto);
         if (ticketGenerado) {
-            setTimeout(async () => {
-                await imprimirTicketConConfigActual();
+            setTimeout(() => {
+                imprimirTicketConConfigActual().catch((err) => {
+                    console.error('Error al imprimir ticket:', err);
+                    mostrarNotificacion('⚠️ Error al imprimir ticket', true);
+                });
             }, 500);
         } else {
             mostrarNotificacion('⚠️ Artículo guardado, pero no se pudo generar el ticket', true);
@@ -292,8 +295,10 @@ async function reimprimirTicket(id) {
         if (articulo) {
             const ticketGenerado = await generarTicket(articulo);
             if (ticketGenerado) {
-                setTimeout(async () => {
-                    await imprimirTicketConConfigActual();
+                setTimeout(() => {
+                    imprimirTicketConConfigActual().catch((err) => {
+                        console.error('Error reimprimiendo ticket:', err);
+                    });
                 }, 500); // Pequeño delay para asegurar que el DOM se actualizó
             }
         }
@@ -309,5 +314,10 @@ function cerrarModalTicket() {
 }
 
 async function imprimirDesdePreview() {
-    await imprimirTicketConConfigActual();
+    try {
+        await imprimirTicketConConfigActual();
+    } catch (error) {
+        console.error('Error imprimiendo desde preview:', error);
+        mostrarNotificacion('⚠️ Error al imprimir ticket', true);
+    }
 }

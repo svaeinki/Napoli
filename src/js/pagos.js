@@ -82,6 +82,17 @@ async function mostrarModalPago(id) {
     if (modalContent) {
         modalContent.scrollTop = 0;
     }
+
+    if (modalPagoAbortController) {
+        modalPagoAbortController.abort();
+    }
+    modalPagoAbortController = new AbortController();
+    modal.addEventListener('click', (event) => {
+        if (event.target === modal) {
+            cerrarModalPago();
+        }
+    }, { signal: modalPagoAbortController.signal });
+
     modal.style.display = 'block';
     } catch (error) {
         console.error('Error mostrando modal de pago:', error);
@@ -179,14 +190,13 @@ async function actualizarValorServicio() {
     }
 }
 
-function cerrarModalPago() {
-    document.getElementById('modalPago').style.display = 'none';
-}
+let modalPagoAbortController = null;
 
-// Cerrar modal al hacer click fuera
-window.addEventListener('click', function(event) {
-    const modal = document.getElementById('modalPago');
-    if (event.target === modal) {
-        cerrarModalPago();
+function cerrarModalPago() {
+    if (modalPagoAbortController) {
+        modalPagoAbortController.abort();
+        modalPagoAbortController = null;
     }
-});
+    const modal = document.getElementById('modalPago');
+    if (modal) modal.style.display = 'none';
+}

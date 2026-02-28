@@ -165,14 +165,18 @@ async function pruebaImpresion() {
             ? '80mm'
             : '58mm';
 
-        setTimeout(async () => {
-            const resultadoImpresion = await window.electronAPI.imprimir({ width });
-            if (!resultadoImpresion || !resultadoImpresion.success) {
-                const mensaje = resultadoImpresion && resultadoImpresion.error
-                    ? resultadoImpresion.error
-                    : 'La impresora rechazó el ticket de prueba';
-                mostrarNotificacion(`❌ ${mensaje}`, true);
-            }
+        setTimeout(() => {
+            window.electronAPI.imprimir({ width }).then((resultadoImpresion) => {
+                if (!resultadoImpresion || !resultadoImpresion.success) {
+                    const mensaje = resultadoImpresion && resultadoImpresion.error
+                        ? resultadoImpresion.error
+                        : 'La impresora rechazó el ticket de prueba';
+                    mostrarNotificacion(`❌ ${mensaje}`, true);
+                }
+            }).catch((err) => {
+                console.error('Error imprimiendo ticket de prueba:', err);
+                mostrarNotificacion('❌ Error al imprimir ticket de prueba', true);
+            });
         }, 500);
     } catch (error) {
         console.error('Error imprimiendo ticket de prueba:', error);

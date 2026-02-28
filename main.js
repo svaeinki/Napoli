@@ -721,17 +721,6 @@ function operacionBloqueadaPorRestore() {
     return restauracionEnCurso;
 }
 
-function crearErrorRestoreBusy() {
-    const error = new Error(RESTORE_BUSY_MESSAGE);
-    error.code = 'RESTORE_BUSY';
-    return error;
-}
-
-function asegurarNoRestoreEnCurso() {
-    if (operacionBloqueadaPorRestore()) {
-        throw crearErrorRestoreBusy();
-    }
-}
 
 function respuestaBloqueoRestoreEscritura() {
     if (!operacionBloqueadaPorRestore()) {
@@ -958,7 +947,7 @@ app.on('before-quit', (event) => {
 // HANDLERS IPC - DIAGNÓSTICO / RUNTIME
 // ============================================
 
-ipcMain.handle('diag:event', async (event, payload = {}) => {
+ipcMain.handle('diag:event', async (_event, payload = {}) => {
     const safePayload = payload && typeof payload === 'object' ? payload : { value: payload };
     logDiag('renderer:event', safePayload);
     return { success: true };
@@ -972,7 +961,7 @@ ipcMain.handle('app:runtimeInfo', async () => {
 // HANDLERS IPC - BASE DE DATOS
 // ============================================
 
-ipcMain.handle('db:insertar', async (event, articulo) => {
+ipcMain.handle('db:insertar', async (_event, articulo) => {
     const bloqueo = respuestaBloqueoRestoreEscritura();
     if (bloqueo) return bloqueo;
     if (!dbService) return { success: false, error: 'Base de datos no inicializada' };
@@ -984,18 +973,28 @@ ipcMain.handle('db:insertar', async (event, articulo) => {
 });
 
 ipcMain.handle('db:obtenerTodos', async () => {
-    asegurarNoRestoreEnCurso();
-    if (!dbService) throw new Error('Base de datos no inicializada');
-    return await medirOperacionDb('db:obtenerTodos', () => dbService.obtenerTodos());
+    const bloqueo = respuestaBloqueoRestoreEscritura();
+    if (bloqueo) return bloqueo;
+    if (!dbService) return { success: false, error: 'Base de datos no inicializada' };
+    try {
+        return await medirOperacionDb('db:obtenerTodos', () => dbService.obtenerTodos());
+    } catch (error) {
+        return payloadErrorOperacion(error);
+    }
 });
 
-ipcMain.handle('db:obtenerPorId', async (event, id) => {
-    asegurarNoRestoreEnCurso();
-    if (!dbService) throw new Error('Base de datos no inicializada');
-    return await medirOperacionDb('db:obtenerPorId', () => dbService.obtenerPorId(id));
+ipcMain.handle('db:obtenerPorId', async (_event, id) => {
+    const bloqueo = respuestaBloqueoRestoreEscritura();
+    if (bloqueo) return bloqueo;
+    if (!dbService) return { success: false, error: 'Base de datos no inicializada' };
+    try {
+        return await medirOperacionDb('db:obtenerPorId', () => dbService.obtenerPorId(id));
+    } catch (error) {
+        return payloadErrorOperacion(error);
+    }
 });
 
-ipcMain.handle('db:actualizarEstado', async (event, id, nuevoEstado) => {
+ipcMain.handle('db:actualizarEstado', async (_event, id, nuevoEstado) => {
     const bloqueo = respuestaBloqueoRestoreEscritura();
     if (bloqueo) return bloqueo;
     if (!dbService) return { success: false, error: 'Base de datos no inicializada' };
@@ -1006,7 +1005,7 @@ ipcMain.handle('db:actualizarEstado', async (event, id, nuevoEstado) => {
     }
 });
 
-ipcMain.handle('db:eliminar', async (event, id) => {
+ipcMain.handle('db:eliminar', async (_event, id) => {
     const bloqueo = respuestaBloqueoRestoreEscritura();
     if (bloqueo) return bloqueo;
     if (!dbService) return { success: false, error: 'Base de datos no inicializada' };
@@ -1017,19 +1016,29 @@ ipcMain.handle('db:eliminar', async (event, id) => {
     }
 });
 
-ipcMain.handle('db:buscar', async (event, termino) => {
-    asegurarNoRestoreEnCurso();
-    if (!dbService) throw new Error('Base de datos no inicializada');
-    return await medirOperacionDb('db:buscar', () => dbService.buscar(termino));
+ipcMain.handle('db:buscar', async (_event, termino) => {
+    const bloqueo = respuestaBloqueoRestoreEscritura();
+    if (bloqueo) return bloqueo;
+    if (!dbService) return { success: false, error: 'Base de datos no inicializada' };
+    try {
+        return await medirOperacionDb('db:buscar', () => dbService.buscar(termino));
+    } catch (error) {
+        return payloadErrorOperacion(error);
+    }
 });
 
 ipcMain.handle('db:obtenerEstadisticas', async () => {
-    asegurarNoRestoreEnCurso();
-    if (!dbService) throw new Error('Base de datos no inicializada');
-    return await medirOperacionDb('db:obtenerEstadisticas', () => dbService.obtenerEstadisticas());
+    const bloqueo = respuestaBloqueoRestoreEscritura();
+    if (bloqueo) return bloqueo;
+    if (!dbService) return { success: false, error: 'Base de datos no inicializada' };
+    try {
+        return await medirOperacionDb('db:obtenerEstadisticas', () => dbService.obtenerEstadisticas());
+    } catch (error) {
+        return payloadErrorOperacion(error);
+    }
 });
 
-ipcMain.handle('db:migrarDesdeLocalStorage', async (event, datosJSON) => {
+ipcMain.handle('db:migrarDesdeLocalStorage', async (_event, datosJSON) => {
     const bloqueo = respuestaBloqueoRestoreEscritura();
     if (bloqueo) return bloqueo;
     if (!dbService) return { success: false, error: 'Base de datos no inicializada' };
@@ -1044,7 +1053,7 @@ ipcMain.handle('db:migrarDesdeLocalStorage', async (event, datosJSON) => {
 // HANDLERS IPC - PAGOS Y ABONOS
 // ============================================
 
-ipcMain.handle('pago:registrarAbono', async (event, articuloId, monto, metodoPago, observaciones) => {
+ipcMain.handle('pago:registrarAbono', async (_event, articuloId, monto, metodoPago, observaciones) => {
     const bloqueo = respuestaBloqueoRestoreEscritura();
     if (bloqueo) return bloqueo;
     if (!dbService) return { success: false, error: 'Base de datos no inicializada' };
@@ -1057,13 +1066,18 @@ ipcMain.handle('pago:registrarAbono', async (event, articuloId, monto, metodoPag
     }
 });
 
-ipcMain.handle('pago:obtenerAbonos', async (event, articuloId) => {
-    asegurarNoRestoreEnCurso();
-    if (!dbService) throw new Error('Base de datos no inicializada');
-    return await medirOperacionDb('pago:obtenerAbonos', () => dbService.obtenerAbonosArticulo(articuloId));
+ipcMain.handle('pago:obtenerAbonos', async (_event, articuloId) => {
+    const bloqueo = respuestaBloqueoRestoreEscritura();
+    if (bloqueo) return bloqueo;
+    if (!dbService) return { success: false, error: 'Base de datos no inicializada' };
+    try {
+        return await medirOperacionDb('pago:obtenerAbonos', () => dbService.obtenerAbonosArticulo(articuloId));
+    } catch (error) {
+        return payloadErrorOperacion(error);
+    }
 });
 
-ipcMain.handle('pago:actualizarValor', async (event, articuloId, nuevoValor) => {
+ipcMain.handle('pago:actualizarValor', async (_event, articuloId, nuevoValor) => {
     const bloqueo = respuestaBloqueoRestoreEscritura();
     if (bloqueo) return bloqueo;
     if (!dbService) return { success: false, error: 'Base de datos no inicializada' };
@@ -1120,19 +1134,24 @@ ipcMain.handle('backup:seleccionarArchivoDB', async () => {
     }
 });
 
-ipcMain.handle('backup:validarDB', async (event, rutaArchivo) => {
+ipcMain.handle('backup:validarDB', async (_event, rutaArchivo) => {
     const resultado = validarBackupDBInterno(rutaArchivo);
     registrarEstadoBackups({ lastValidation: construirLogValidacion(resultado, 'manual') });
     return resultado;
 });
 
-ipcMain.handle('backup:restaurarDB', async (event, rutaBackup) => {
+ipcMain.handle('backup:restaurarDB', async (_event, rutaBackup) => {
     return await restaurarBackupDB(rutaBackup);
 });
 
 ipcMain.handle('backup:estado', async () => {
-    asegurarNoRestoreEnCurso();
-    return obtenerEstadoBackups();
+    const bloqueo = respuestaBloqueoRestoreEscritura();
+    if (bloqueo) return bloqueo;
+    try {
+        return obtenerEstadoBackups();
+    } catch (error) {
+        return payloadErrorOperacion(error);
+    }
 });
 
 async function crearBackupAutomatico() {
@@ -1449,7 +1468,7 @@ function limpiarBackupsAntiguos() {
 // HANDLERS IPC - DROPBOX
 // ============================================
 
-ipcMain.handle('dropbox:configurar', async (event, token) => {
+ipcMain.handle('dropbox:configurar', async (_event, token) => {
     try {
         const tokenLimpio = typeof token === 'string' ? token.trim() : '';
         if (!tokenLimpio) {
@@ -1538,7 +1557,7 @@ ipcMain.handle('config:obtener', async () => {
     };
 });
 
-ipcMain.handle('config:guardar', async (event, nuevaConfig) => {
+ipcMain.handle('config:guardar', async (_event, nuevaConfig) => {
     try {
         const config = cargarConfiguracion();
 
@@ -1560,7 +1579,7 @@ ipcMain.handle('config:guardar', async (event, nuevaConfig) => {
 // HANDLER IPC - IMPRESIÓN
 // ============================================
 
-ipcMain.handle('imprimir', async (event, opciones = {}) => {
+ipcMain.handle('imprimir', async (_event, opciones = {}) => {
     if (!mainWindow) {
         return { success: false, error: 'Ventana principal no disponible' };
     }

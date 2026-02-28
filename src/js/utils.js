@@ -179,12 +179,12 @@ function inicializarGuardiaFocoInputs() {
 }
 
 let resolverConfirmacionPendiente = null;
-let modalConfirmacionLimpieza = null;
+let modalConfirmacionAbortController = null;
 
 function limpiarListenersModalConfirmacion() {
-    if (typeof modalConfirmacionLimpieza === 'function') {
-        modalConfirmacionLimpieza();
-        modalConfirmacionLimpieza = null;
+    if (modalConfirmacionAbortController) {
+        modalConfirmacionAbortController.abort();
+        modalConfirmacionAbortController = null;
     }
 }
 
@@ -229,24 +229,20 @@ async function confirmarAccionAsync({ titulo = 'Confirmar acción', mensaje = ''
 
     modal.style.display = 'block';
 
-    const onBackdropClick = (event) => {
+    modalConfirmacionAbortController = new AbortController();
+    const { signal } = modalConfirmacionAbortController;
+
+    modal.addEventListener('click', (event) => {
         if (event.target === modal) {
             resolverModalConfirmacion(false);
         }
-    };
-    const onEsc = (event) => {
+    }, { signal });
+    document.addEventListener('keydown', (event) => {
         if (event.key === 'Escape') {
             event.preventDefault();
             resolverModalConfirmacion(false);
         }
-    };
-
-    modal.addEventListener('click', onBackdropClick);
-    document.addEventListener('keydown', onEsc);
-    modalConfirmacionLimpieza = () => {
-        modal.removeEventListener('click', onBackdropClick);
-        document.removeEventListener('keydown', onEsc);
-    };
+    }, { signal });
 
     return await new Promise((resolve) => {
         resolverConfirmacionPendiente = resolve;
@@ -274,6 +270,12 @@ function desbloquearFormularioIngreso({ focusRut = true } = {}) {
 }
 
 function showTab(tabName) {
+    // Limpiar debounce de búsqueda pendiente al cambiar de tab
+    if (typeof _busquedaDebounceTimer !== 'undefined' && _busquedaDebounceTimer !== null) {
+        clearTimeout(_busquedaDebounceTimer);
+        _busquedaDebounceTimer = null;
+    }
+
     document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
     document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
 

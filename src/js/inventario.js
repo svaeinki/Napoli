@@ -468,6 +468,7 @@ async function exportarDatos() {
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+        URL.revokeObjectURL(url);
 
         mostrarNotificacion('📥 Datos exportados correctamente');
     } catch (error) {
