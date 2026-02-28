@@ -41,6 +41,7 @@ Desktop.ini
 *.tmp
 *.temp
 .cache/
+.audit/
 
 # Archivos de entorno
 .env

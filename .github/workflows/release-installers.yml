@@ -9,9 +9,35 @@ permissions:
   contents: write
 
 jobs:
+  quality:
+    name: Quality Gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+      - name: Check syntax
+        run: npm run check:syntax
+
+      - name: Audit runtime dependencies
+        run: npm run check:audit
+
   build:
     name: Build ${{ matrix.os_name }} installer
     runs-on: ${{ matrix.runner }}
+    needs: quality
     strategy:
       fail-fast: false
       matrix:

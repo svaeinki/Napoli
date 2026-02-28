@@ -167,6 +167,11 @@ La integración con Dropbox es **completamente opcional** y se configura desde d
 2. Ingresa tu token de acceso a Dropbox.
 3. La app guarda el token **encriptado** en el directorio de datos del usuario.
 
+Comportamiento operativo de seguridad:
+- Si `safeStorage` está disponible, el token se guarda cifrado.
+- Si `safeStorage` no está disponible en ese sistema, la app muestra una advertencia explícita y guarda el token sin cifrar en ese equipo.
+- En ese caso, se registra una decisión operativa en `config.json` bajo `operationalDecisions` para trazabilidad.
+
 No requiere variables de entorno ni archivos `.env`.
 
 ---
@@ -241,7 +246,7 @@ npm run release:check
 Valida:
 1. Sintaxis JS
 2. Auditoría de dependencias runtime
-3. Build de Windows sin publicar
+3. Build del SO actual sin publicar (`check:build-current`)
 
 ---
 
@@ -256,9 +261,13 @@ npm run release:check
 Este comando valida, en orden:
 1. Sintaxis JS (`check:syntax`)
 2. Seguridad de dependencias runtime (`check:audit`)
-3. Build de Windows (`check:build-win`)
+3. Build del SO actual (`check:build-current`)
 
 Si cualquiera falla, la release no debe publicarse.
+
+Criterio de seguridad para producción:
+- El objetivo oficial es `npm audit --omit=dev` en `0` vulnerabilidades.
+- `npm install` puede mostrar alertas de dependencias de desarrollo y eso no bloquea release mientras `check:audit` esté en verde.
 
 ### 🚀 Release automático por tag (GitHub Releases)
 
@@ -270,10 +279,11 @@ git push origin vX.Y.Z
 ```
 
 Qué hace el workflow:
-1. Build en matriz por SO nativo: Windows, macOS y Linux.
-2. Genera instaladores `x64` por plataforma.
-3. Publica/actualiza el GitHub Release del tag.
-4. Adjunta **solo instaladores finales**:
+1. Ejecuta un **quality gate** previo (`npm test`, `check:syntax`, `check:audit`).
+2. Build en matriz por SO nativo: Windows, macOS y Linux.
+3. Genera instaladores `x64` por plataforma.
+4. Publica/actualiza el GitHub Release del tag.
+5. Adjunta **solo instaladores finales**:
    - `.exe` (Windows)
    - `.dmg` (macOS)
    - `.AppImage` (Linux)
@@ -281,6 +291,11 @@ Qué hace el workflow:
 Política de release:
 - En GitHub Releases se publican exclusivamente instaladores finales.
 - No se publican archivos de auto-update (`.yml`, `.blockmap`, `.zip`, checksums u otros auxiliares).
+
+Política operativa actual (uso interno, 1 usuaria):
+- Se permite distribución sin firma de código en esta etapa.
+- Debe asumirse advertencia de Gatekeeper/SmartScreen como comportamiento esperado.
+- Si la distribución se amplía a público general, la firma/notarización pasa a ser requisito obligatorio.
 
 ---
 
@@ -382,6 +397,14 @@ zapateria-bodega/
 ---
 
 ## 📝 Changelog
+
+### v2.0.8 (2026-02-28)
+- ✅ Workflow de release endurecido con quality gate previo (`test`, `check:syntax`, `check:audit`) antes de compilar instaladores.
+- 🧪 Nuevo check portable local: `check:build-current`, y `release:check` actualizado para no depender de cross-build de Windows desde macOS/Linux.
+- 🔧 Limpieza de tooling de rebuild: `postinstall`/`rebuild` migrados a `electron-builder install-app-deps` y remoción de `electron-rebuild` legacy.
+- 🛡️ Criterio de seguridad formalizado para producción: gate por `npm audit --omit=dev` (runtime).
+- 🔐 Política explícita para Dropbox sin cifrado local: advertencia visible + registro de decisión operativa en `config.json`.
+- 📘 Documentación de política de firma actualizada para escenario interno de una usuaria.
 
 ### v2.0.6 (2026-02-23)
 - 🛠️ Corrección del runner macOS en CI para releases: de `macos-13` a `macos-15-intel` (`x64`).

@@ -4,9 +4,9 @@
   "description": "Sistema de gestión de bodega para Napoli - Reparadora de Calzado",
   "main": "main.js",
   "scripts": {
-    "postinstall": "electron-rebuild -f -w better-sqlite3",
+    "postinstall": "electron-builder install-app-deps",
     "start": "node scripts/start-electron.js",
-    "rebuild": "electron-rebuild",
+    "rebuild": "electron-builder install-app-deps",
     "test": "node --test scripts/tests/*.test.js",
     "build": "electron-builder --win --mac --linux",
     "build-mac": "electron-builder --mac",
@@ -14,8 +14,9 @@
     "build-linux": "electron-builder --linux",
     "check:syntax": "node scripts/check-syntax.js",
     "check:audit": "npm audit --omit=dev --audit-level=high",
+    "check:build-current": "node scripts/check-build-current.js",
     "check:build-win": "electron-builder --win --publish never",
-    "release:check": "npm run check:syntax && npm run check:audit && npm run check:build-win"
+    "release:check": "npm run check:syntax && npm run check:audit && npm run check:build-current"
   },
   "keywords": [
     "electron",
@@ -30,8 +31,7 @@
   "devDependencies": {
     "@electron/rebuild": "^4.0.3",
     "electron": "^40.6.0",
-    "electron-builder": "^26.8.1",
-    "electron-rebuild": "^2.0.3"
+    "electron-builder": "^26.5.0"
   },
   "overrides": {
     "node-gyp": "^10.0.0"

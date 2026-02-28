@@ -33,6 +33,9 @@ const DB_WORKER_MAX_RETRIES = 10;
 const REQUIRED_BACKUP_TABLES = ['articulos', 'abonos', 'auditoria'];
 const RESTORE_BUSY_MESSAGE = 'Restauración en curso. Intente nuevamente al terminar.';
 const WARNING_TOKEN_NO_CIFRADO = 'Tu sistema no permite cifrado local del token de Dropbox; se guardará sin cifrar en este equipo.';
+const INSECURE_STORAGE_RESPONSE_CODE = 'INSECURE_STORAGE';
+const OP_DECISION_DROPBOX_TOKEN_SIN_CIFRADO = 'DROPBOX_TOKEN_SIN_CIFRADO';
+const OPERATIONAL_DECISIONS_MAX = 50;
 const PRINTER_CONFIG_DEFAULTS = Object.freeze({
     width: '58mm',
     fontProfile58: 'legible',
@@ -439,6 +442,82 @@ function obtenerEstadoBackups() {
     };
 }
 
+function normalizarDecisionOperativa(rawDecision) {
+    if (!rawDecision || typeof rawDecision !== 'object') {
+        return null;
+    }
+
+    const code = typeof rawDecision.code === 'string' ? rawDecision.code.trim() : '';
+    if (!code) {
+        return null;
+    }
+
+    const context = typeof rawDecision.context === 'string' && rawDecision.context.trim()
+        ? rawDecision.context.trim()
+        : 'general';
+    const note = typeof rawDecision.note === 'string'
+        ? rawDecision.note.trim().slice(0, 500)
+        : '';
+    const ts = typeof rawDecision.ts === 'string' && rawDecision.ts.trim()
+        ? rawDecision.ts.trim()
+        : new Date().toISOString();
+
+    return {
+        code,
+        context,
+        accepted: rawDecision.accepted !== false,
+        note,
+        ts
+    };
+}
+
+function normalizarListaDecisionesOperativas(rawList) {
+    if (!Array.isArray(rawList)) {
+        return [];
+    }
+
+    const normalizadas = [];
+    for (const decision of rawList) {
+        const item = normalizarDecisionOperativa(decision);
+        if (!item) continue;
+        normalizadas.push(item);
+    }
+    return normalizadas.slice(-OPERATIONAL_DECISIONS_MAX);
+}
+
+function registrarDecisionOperativa(decision, configExistente = null) {
+    try {
+        const config = (configExistente && typeof configExistente === 'object')
+            ? configExistente
+            : cargarConfiguracion();
+
+        const decisionNormalizada = normalizarDecisionOperativa(decision);
+        if (!decisionNormalizada) {
+            return null;
+        }
+
+        const decisionesActuales = normalizarListaDecisionesOperativas(config.operationalDecisions);
+        const yaRegistrada = decisionesActuales.some((item) =>
+            item.code === decisionNormalizada.code && item.context === decisionNormalizada.context
+        );
+        if (yaRegistrada) {
+            if (!Array.isArray(config.operationalDecisions) || config.operationalDecisions.length !== decisionesActuales.length) {
+                config.operationalDecisions = decisionesActuales;
+                guardarConfiguracion(config);
+            }
+            return null;
+        }
+
+        const actualizada = [...decisionesActuales, decisionNormalizada].slice(-OPERATIONAL_DECISIONS_MAX);
+        config.operationalDecisions = actualizada;
+        guardarConfiguracion(config);
+        return decisionNormalizada;
+    } catch (error) {
+        console.error('Error registrando decisión operativa:', error);
+        return null;
+    }
+}
+
 // Cargar configuración (incluye token de Dropbox)
 function cargarConfiguracion() {
     try {
@@ -447,7 +526,10 @@ function cargarConfiguracion() {
             let configModificada = false;
 
             if (!config || typeof config !== 'object') {
-                const configPorDefecto = { printer: { ...PRINTER_CONFIG_DEFAULTS } };
+                const configPorDefecto = {
+                    printer: { ...PRINTER_CONFIG_DEFAULTS },
+                    operationalDecisions: []
+                };
                 guardarConfiguracion(configPorDefecto);
                 return configPorDefecto;
             }
@@ -502,6 +584,12 @@ function cargarConfiguracion() {
                 configModificada = true;
             }
 
+            const decisionesNormalizadas = normalizarListaDecisionesOperativas(config.operationalDecisions);
+            if (JSON.stringify(config.operationalDecisions || []) !== JSON.stringify(decisionesNormalizadas)) {
+                config.operationalDecisions = decisionesNormalizadas;
+                configModificada = true;
+            }
+
             if (configModificada) {
                 try {
                     guardarConfiguracion(config);
@@ -514,7 +602,10 @@ function cargarConfiguracion() {
     } catch (error) {
         console.error('Error cargando configuración:', error);
     }
-    const configInicial = { printer: { ...PRINTER_CONFIG_DEFAULTS } };
+    const configInicial = {
+        printer: { ...PRINTER_CONFIG_DEFAULTS },
+        operationalDecisions: []
+    };
     try {
         guardarConfiguracion(configInicial);
     } catch (saveError) {
@@ -785,6 +876,11 @@ app.whenReady().then(async () => {
         if (token) {
             if (!safeStorage.isEncryptionAvailable()) {
                 console.warn(`⚠️ ${WARNING_TOKEN_NO_CIFRADO}`);
+                registrarDecisionOperativa({
+                    code: OP_DECISION_DROPBOX_TOKEN_SIN_CIFRADO,
+                    context: 'dropbox:auto_init',
+                    note: 'Token Dropbox cargado en equipo sin cifrado local disponible.'
+                }, config);
             }
             dropboxManager = new DropboxManager(token);
         }
@@ -1368,12 +1464,25 @@ ipcMain.handle('dropbox:configurar', async (event, token) => {
             config.dropboxToken = cifrarToken(tokenLimpio);
             guardarConfiguracion(config);
             const warning = safeStorage.isEncryptionAvailable() ? null : WARNING_TOKEN_NO_CIFRADO;
+            if (warning) {
+                registrarDecisionOperativa({
+                    code: OP_DECISION_DROPBOX_TOKEN_SIN_CIFRADO,
+                    context: 'dropbox:configurar',
+                    note: 'Token Dropbox configurado sin cifrado local por limitación del sistema.'
+                }, config);
+            }
 
-            return {
+            const response = {
                 success: true,
                 usuario: verificacion.usuario,
-                warning
+                warning,
+                insecureStorage: Boolean(warning)
             };
+            if (warning) {
+                response.code = INSECURE_STORAGE_RESPONSE_CODE;
+            }
+
+            return response;
         } else {
             dropboxManager = null;
             return { success: false, error: verificacion.error };
