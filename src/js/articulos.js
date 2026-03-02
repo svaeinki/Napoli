@@ -20,11 +20,24 @@ async function imprimirTicketConConfigActual() {
     return true;
 }
 
+function validarAbonoInline() {
+    const valorTotal = obtenerValorNumerico(document.getElementById('valorTotal'));
+    const abonoInicial = obtenerValorNumerico(document.getElementById('abonoInicial'));
+    const errorEl = document.getElementById('abonoError');
+    if (!errorEl) return;
+
+    if (abonoInicial > 0 && valorTotal > 0 && abonoInicial > valorTotal) {
+        errorEl.classList.add('visible');
+    } else {
+        errorEl.classList.remove('visible');
+    }
+}
+
 async function ingresarArticulo(e) {
     e.preventDefault();
 
     const submitBtn = e.target ? e.target.querySelector('[type="submit"]') : null;
-    if (submitBtn) submitBtn.disabled = true;
+    setBtnLoading(submitBtn, true);
 
     try {
     const rutInput = document.getElementById('rut').value.trim();
@@ -78,7 +91,7 @@ async function ingresarArticulo(e) {
         try {
             articuloCompleto = await window.electronAPI.obtenerPorId(articuloId);
         } catch (errorDetalle) {
-            console.warn('No se pudo recargar artículo recién insertado, se usará snapshot local:', errorDetalle);
+            console.error('No se pudo recargar artículo recién insertado, se usará snapshot local:', errorDetalle);
         }
         if (!articuloCompleto) {
             articuloCompleto = {
@@ -115,8 +128,21 @@ async function ingresarArticulo(e) {
         console.error('Error ingresando artículo:', error);
         mostrarNotificacion('❌ Error al ingresar el artículo', true);
     } finally {
-        if (submitBtn) submitBtn.disabled = false;
+        setBtnLoading(submitBtn, false);
     }
+}
+
+function desbloquearFormulariosDespuesDeAccion() {
+    setTimeout(() => {
+        const tabIngresar = document.getElementById('ingresar');
+        const ingresarActivo = Boolean(tabIngresar && tabIngresar.classList.contains('active'));
+        if (ingresarActivo && typeof desbloquearFormularioIngreso === 'function') {
+            desbloquearFormularioIngreso({ focusRut: false });
+        }
+        if (typeof asegurarInputsEditablesActivos === 'function') {
+            asegurarInputsEditablesActivos('#buscar');
+        }
+    }, 0);
 }
 
 async function marcarEntregado(id) {
@@ -140,16 +166,7 @@ async function marcarEntregado(id) {
                     marcarInventarioDirty();
                 }
                 mostrarNotificacion('✅ Artículo marcado como entregado');
-                setTimeout(() => {
-                    const tabIngresar = document.getElementById('ingresar');
-                    const ingresarActivo = Boolean(tabIngresar && tabIngresar.classList.contains('active'));
-                    if (ingresarActivo && typeof desbloquearFormularioIngreso === 'function') {
-                        desbloquearFormularioIngreso({ focusRut: false });
-                    }
-                    if (typeof asegurarInputsEditablesActivos === 'function') {
-                        asegurarInputsEditablesActivos('#buscar');
-                    }
-                }, 0);
+                desbloquearFormulariosDespuesDeAccion();
             } else {
                 mostrarNotificacion(`❌ No se pudo marcar entregado: ${resultado.error}`, true);
             }
@@ -178,16 +195,7 @@ async function marcarEnBodega(id) {
                     marcarInventarioDirty();
                 }
                 mostrarNotificacion('↩ Artículo devuelto a bodega');
-                setTimeout(() => {
-                    const tabIngresar = document.getElementById('ingresar');
-                    const ingresarActivo = Boolean(tabIngresar && tabIngresar.classList.contains('active'));
-                    if (ingresarActivo && typeof desbloquearFormularioIngreso === 'function') {
-                        desbloquearFormularioIngreso({ focusRut: false });
-                    }
-                    if (typeof asegurarInputsEditablesActivos === 'function') {
-                        asegurarInputsEditablesActivos('#buscar');
-                    }
-                }, 0);
+                desbloquearFormulariosDespuesDeAccion();
             } else {
                 mostrarNotificacion(`❌ No se pudo devolver a bodega: ${resultado.error}`, true);
             }

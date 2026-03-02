@@ -14,6 +14,21 @@ const MUTATING_OPS = new Set([
     'crearBackup'
 ]);
 
+const ALLOWED_DB_OPS = new Set([
+    'insertar',
+    'obtenerTodos',
+    'obtenerPorId',
+    'actualizarEstado',
+    'eliminar',
+    'buscar',
+    'obtenerEstadisticas',
+    'migrarDesdeLocalStorage',
+    'registrarAbono',
+    'obtenerAbonosArticulo',
+    'actualizarValorTotal',
+    'crearBackup'
+]);
+
 class DBService {
     constructor({ dbPath, diagnostics } = {}) {
         this.dbPath = dbPath;
@@ -319,46 +334,27 @@ class DBService {
         if (!this.legacyDb) {
             throw new Error('Base de datos legacy no inicializada');
         }
-        switch (op) {
-        case 'insertar':
-            return this.legacyDb.insertar(args[0]);
-        case 'obtenerTodos':
-            return this.legacyDb.obtenerTodos();
-        case 'obtenerPorId':
-            return this.legacyDb.obtenerPorId(args[0]);
-        case 'actualizarEstado':
-            return this.legacyDb.actualizarEstado(args[0], args[1]);
-        case 'eliminar':
-            return this.legacyDb.eliminar(args[0]);
-        case 'buscar':
-            return this.legacyDb.buscar(args[0]);
-        case 'obtenerEstadisticas':
-            return this.legacyDb.obtenerEstadisticas();
-        case 'migrarDesdeLocalStorage':
-            return this.legacyDb.migrarDesdeLocalStorage(args[0]);
-        case 'registrarAbono':
-            return this.legacyDb.registrarAbono(args[0], args[1], args[2], args[3]);
-        case 'obtenerAbonosArticulo':
-            return this.legacyDb.obtenerAbonosArticulo(args[0]);
-        case 'actualizarValorTotal':
-            return this.legacyDb.actualizarValorTotal(args[0], args[1]);
-        case 'crearBackup':
-            return this.legacyDb.crearBackup(args[0]);
-        case 'cerrar':
+        if (op === 'cerrar') {
             if (this.legacyDb) {
                 this.legacyDb.cerrar();
                 this.legacyDb = null;
             }
             return { success: true };
-        case 'reabrir':
+        }
+        if (op === 'reabrir') {
             if (this.legacyDb) {
                 this.legacyDb.cerrar();
             }
             this.legacyDb = new DatabaseManager(this.dbPath);
             return { success: true };
-        default:
+        }
+        if (!ALLOWED_DB_OPS.has(op)) {
             throw new Error(`Operación DB no soportada en legacy: ${op}`);
         }
+        if (typeof this.legacyDb[op] !== 'function') {
+            throw new Error(`Operación DB no implementada en legacy: ${op}`);
+        }
+        return this.legacyDb[op](...args);
     }
 
     async call(op, args = [], options = {}) {

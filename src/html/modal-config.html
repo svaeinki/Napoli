@@ -1,6 +1,6 @@
-<div id="modal-config" class="modal" style="display: none;">
+<div id="modal-config" class="modal" style="display: none;" role="dialog" aria-modal="true" aria-label="Configuración de impresión">
     <div class="modal-content">
-        <span class="close-modal" onclick="cerrarConfiguracion()">&times;</span>
+        <span class="close-modal" onclick="cerrarConfiguracion()" role="button" aria-label="Cerrar" tabindex="0">&times;</span>
         <h2>⚙️ Configuración de Impresión</h2>
 
         <div class="form-group full-width">
@@ -30,7 +30,7 @@
     /* Estilos básicos para el modal si no existen globalmente */
     #modal-config {
         position: fixed;
-        z-index: 1000;
+        z-index: 2000;
         left: 0;
         top: 0;
         width: 100%;

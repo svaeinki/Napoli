@@ -123,48 +123,76 @@ async function refrescarChecklistActualizacion() {
 }
 
 async function crearBackupManual() {
-    const resultado = await window.electronAPI.crearBackup();
-    if (resultado.success) {
-        if (resultado.warning) {
-            mostrarNotificacion(`⚠️ ${resultado.warning}`, true);
+    const btn = document.querySelector('[onclick="crearBackupManual()"]');
+    setBtnLoading(btn, true);
+    try {
+        const resultado = await window.electronAPI.crearBackup();
+        if (resultado && resultado.success) {
+            if (resultado.warning) {
+                mostrarNotificacion(`⚠️ ${resultado.warning}`, true);
+            } else {
+                mostrarNotificacion('✅ Backup creado correctamente');
+            }
+            await refrescarChecklistActualizacion();
         } else {
-            mostrarNotificacion('✅ Backup creado correctamente');
+            mostrarNotificacion('❌ Error al crear backup: ' + (resultado && resultado.error || 'Error desconocido'), true);
         }
-        await refrescarChecklistActualizacion();
-    } else {
-        mostrarNotificacion('❌ Error al crear backup: ' + resultado.error, true);
+    } catch (error) {
+        console.error('Error creando backup manual:', error);
+        mostrarNotificacion('❌ Error al crear backup', true);
+    } finally {
+        setBtnLoading(btn, false);
     }
 }
 
 async function exportarJSONManual() {
-    const resultado = await window.electronAPI.exportarJSON();
-    if (resultado.success) {
-        mostrarNotificacion('✅ JSON exportado: ' + resultado.filename);
-    } else {
-        mostrarNotificacion('❌ Error al exportar: ' + resultado.error, true);
+    try {
+        const resultado = await window.electronAPI.exportarJSON();
+        if (resultado && resultado.success) {
+            mostrarNotificacion('✅ JSON exportado: ' + resultado.filename);
+        } else {
+            mostrarNotificacion('❌ Error al exportar: ' + (resultado && resultado.error || 'Error desconocido'), true);
+        }
+    } catch (error) {
+        console.error('Error exportando JSON:', error);
+        mostrarNotificacion('❌ Error al exportar JSON', true);
     }
 }
 
 async function exportarExcel() {
-    mostrarNotificacion('⏳ Exportando a Excel...', false);
+    const btn = document.querySelector('[onclick="exportarExcel()"]');
+    setBtnLoading(btn, true);
+    try {
+        mostrarNotificacion('⏳ Exportando a Excel...', false);
 
-    const resultado = await window.electronAPI.exportarExcel();
+        const resultado = await window.electronAPI.exportarExcel();
 
-    if (resultado.success) {
-        if (resultado.warning) {
-            mostrarNotificacion(`⚠️ ${resultado.warning}`, true);
+        if (resultado && resultado.success) {
+            if (resultado.warning) {
+                mostrarNotificacion(`⚠️ ${resultado.warning}`, true);
+            } else {
+                mostrarNotificacion(`✅ Excel exportado: ${resultado.filename}`);
+            }
         } else {
-            mostrarNotificacion(`✅ Excel exportado: ${resultado.filename}`);
+            mostrarNotificacion('❌ Error al exportar Excel: ' + (resultado && resultado.error || 'Error desconocido'), true);
         }
-    } else {
-        mostrarNotificacion('❌ Error al exportar Excel: ' + resultado.error, true);
+    } catch (error) {
+        console.error('Error exportando Excel:', error);
+        mostrarNotificacion('❌ Error al exportar Excel', true);
+    } finally {
+        setBtnLoading(btn, false);
     }
 }
 
 async function abrirCarpetaBackups() {
-    const resultado = await window.electronAPI.abrirCarpetaBackups();
-    if (resultado && resultado.success === false) {
-        mostrarNotificacion('❌ Error abriendo carpeta de backups: ' + resultado.error, true);
+    try {
+        const resultado = await window.electronAPI.abrirCarpetaBackups();
+        if (resultado && resultado.success === false) {
+            mostrarNotificacion('❌ Error abriendo carpeta de backups: ' + resultado.error, true);
+        }
+    } catch (error) {
+        console.error('Error abriendo carpeta de backups:', error);
+        mostrarNotificacion('❌ Error abriendo carpeta de backups', true);
     }
 }
 
@@ -215,6 +243,8 @@ async function validarBackupSeleccionado() {
         }
     }
 
+    const btnValidar = document.querySelector('[onclick="validarBackupSeleccionado()"]');
+    setBtnLoading(btnValidar, true);
     try {
         const resultado = await window.electronAPI.backupValidarDB(backupSeleccionadoPath);
         await refrescarChecklistActualizacion();
@@ -252,6 +282,8 @@ async function validarBackupSeleccionado() {
             'error'
         );
         mostrarNotificacion(`❌ Error validando backup: ${error.message}`, true);
+    } finally {
+        setBtnLoading(btnValidar, false);
     }
 }
 
@@ -273,6 +305,8 @@ async function restaurarBackupSeleccionado() {
         return;
     }
 
+    const btnRestore = document.querySelector('[onclick="restaurarBackupSeleccionado()"]');
+    setBtnLoading(btnRestore, true);
     try {
         setRestoreStatus('⏳ Restaurando backup, por favor espere...', 'warning');
         const resultado = await window.electronAPI.backupRestaurarDB(backupSeleccionadoPath);
@@ -323,6 +357,8 @@ async function restaurarBackupSeleccionado() {
             'error'
         );
         mostrarNotificacion(`❌ Error restaurando backup: ${error.message}`, true);
+    } finally {
+        setBtnLoading(btnRestore, false);
     }
 }
 
@@ -427,24 +463,29 @@ async function desconectarDropbox() {
 }
 
 async function listarBackupsDropbox() {
-    const resultado = await window.electronAPI.dropboxListarBackups();
+    try {
+        const resultado = await window.electronAPI.dropboxListarBackups();
 
-    if (resultado.success) {
-        const lista = document.getElementById('dropboxBackupsList');
+        if (resultado && resultado.success) {
+            const lista = document.getElementById('dropboxBackupsList');
 
-        if (resultado.archivos.length === 0) {
-            lista.innerHTML = '<p>No hay backups en Dropbox aún.</p>';
+            if (resultado.archivos.length === 0) {
+                lista.innerHTML = '<p>No hay backups en Dropbox aún.</p>';
+            } else {
+                let html = '<h4>Archivos en Dropbox:</h4><ul>';
+                resultado.archivos.forEach(archivo => {
+                    const fechaArchivo = formatearFechaChile(archivo.client_modified, { fallback: 'N/A' });
+                    html += `<li>${escaparHtml(archivo.name)} (${escaparHtml(fechaArchivo)})</li>`;
+                });
+                html += '</ul>';
+                lista.innerHTML = html;
+            }
         } else {
-            let html = '<h4>Archivos en Dropbox:</h4><ul>';
-            resultado.archivos.forEach(archivo => {
-                const fechaArchivo = formatearFechaChile(archivo.client_modified, { fallback: 'N/A' });
-                html += `<li>${escaparHtml(archivo.name)} (${escaparHtml(fechaArchivo)})</li>`;
-            });
-            html += '</ul>';
-            lista.innerHTML = html;
+            mostrarNotificacion('❌ Error al listar backups: ' + (resultado && resultado.error || 'Error desconocido'), true);
         }
-    } else {
-        mostrarNotificacion('❌ Error al listar backups: ' + resultado.error, true);
+    } catch (error) {
+        console.error('Error listando backups de Dropbox:', error);
+        mostrarNotificacion('❌ Error al listar backups de Dropbox', true);
     }
 }
 
@@ -456,15 +497,20 @@ async function subirBackupDropboxAhora() {
         peligro: false
     });
     if (confirmado) {
-        mostrarNotificacion('⏳ Creando y subiendo backup...', false);
+        try {
+            mostrarNotificacion('⏳ Creando y subiendo backup...', false);
 
-        const resultado = await window.electronAPI.dropboxSubirBackupAhora();
+            const resultado = await window.electronAPI.dropboxSubirBackupAhora();
 
-        if (resultado.success) {
-            mostrarNotificacion('✅ ' + resultado.mensaje);
-            await refrescarChecklistActualizacion();
-        } else {
-            mostrarNotificacion('❌ Error: ' + resultado.error, true);
+            if (resultado && resultado.success) {
+                mostrarNotificacion('✅ ' + resultado.mensaje);
+                await refrescarChecklistActualizacion();
+            } else {
+                mostrarNotificacion('❌ Error: ' + (resultado && resultado.error || 'Error desconocido'), true);
+            }
+        } catch (error) {
+            console.error('Error subiendo backup a Dropbox:', error);
+            mostrarNotificacion('❌ Error subiendo backup a Dropbox', true);
         }
     }
 }

@@ -4,6 +4,7 @@ const { performance } = require('perf_hooks');
 
 const LOG_MAX_BYTES = 1024 * 1024;
 const LOG_ROTATIONS = 3;
+const ROTATION_CHECK_INTERVAL = 50;
 
 function ensureDir(dirPath) {
     if (!fs.existsSync(dirPath)) {
@@ -11,17 +12,8 @@ function ensureDir(dirPath) {
     }
 }
 
-function rotateLogFileIfNeeded(logPath) {
+function rotateLogFileSync(logPath) {
     try {
-        if (!fs.existsSync(logPath)) {
-            return;
-        }
-
-        const stat = fs.statSync(logPath);
-        if (stat.size < LOG_MAX_BYTES) {
-            return;
-        }
-
         for (let i = LOG_ROTATIONS; i >= 1; i -= 1) {
             const source = i === 1 ? logPath : `${logPath}.${i - 1}`;
             const target = `${logPath}.${i}`;
@@ -48,6 +40,9 @@ class DiagnosticsLogger {
         this.eventLoopThresholdMs = 120;
         this.eventLoopIntervalMs = 250;
         this.lastTickAt = performance.now();
+        this._logCount = 0;
+        this._writeBuffer = [];
+        this._flushTimer = null;
     }
 
     init() {
@@ -60,6 +55,43 @@ class DiagnosticsLogger {
             node: process.version,
             platform: process.platform
         });
+        this._flush();
+    }
+
+    _checkRotation() {
+        try {
+            if (!fs.existsSync(this.logPath)) {
+                return;
+            }
+            const stat = fs.statSync(this.logPath);
+            if (stat.size >= LOG_MAX_BYTES) {
+                rotateLogFileSync(this.logPath);
+            }
+        } catch (error) {
+            // No-op
+        }
+    }
+
+    _scheduleFlush() {
+        if (this._flushTimer) return;
+        this._flushTimer = setTimeout(() => {
+            this._flush();
+        }, 100);
+    }
+
+    _flush() {
+        if (this._flushTimer) {
+            clearTimeout(this._flushTimer);
+            this._flushTimer = null;
+        }
+        if (this._writeBuffer.length === 0) return;
+        const data = this._writeBuffer.join('');
+        this._writeBuffer.length = 0;
+        try {
+            fs.appendFileSync(this.logPath, data, 'utf8');
+        } catch (error) {
+            // No-op on error: diagnostics must not crash the app.
+        }
     }
 
     log(type, payload = {}) {
@@ -68,13 +100,17 @@ class DiagnosticsLogger {
         }
 
         try {
-            rotateLogFileIfNeeded(this.logPath);
+            this._logCount += 1;
+            if (this._logCount % ROTATION_CHECK_INTERVAL === 0) {
+                this._checkRotation();
+            }
             const entry = JSON.stringify({
                 ts: new Date().toISOString(),
                 type,
                 ...payload
             });
-            fs.appendFileSync(this.logPath, `${entry}\n`, 'utf8');
+            this._writeBuffer.push(`${entry}\n`);
+            this._scheduleFlush();
         } catch (error) {
             // No-op: la app debe seguir funcionando aunque falle la escritura de trazas.
         }
@@ -112,6 +148,7 @@ class DiagnosticsLogger {
             clearInterval(this.loopTimer);
             this.loopTimer = null;
         }
+        this._flush();
     }
 }
 

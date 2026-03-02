@@ -7,6 +7,8 @@ let inventarioCache = [];
 let inventarioCacheCargado = false;
 let inventarioDirty = false;
 let inventarioRefreshInFlight = null;
+const ITEMS_POR_PAGINA = 50;
+let paginaActualInventario = 1;
 
 function inventarioTienePendienteRefresh() {
     return inventarioDirty || !inventarioCacheCargado;
@@ -355,6 +357,7 @@ async function aplicarFiltro(options = {}) {
 
         const filtro = obtenerFiltroActualInventario();
         articulosFiltrados = filtrarArticulosPorEstado(inventarioCache, filtro);
+        paginaActualInventario = 1;
 
         if (!inventarioEstaVisible()) {
             return;
@@ -367,6 +370,48 @@ async function aplicarFiltro(options = {}) {
     }
 }
 
+function cambiarPaginaInventario(delta) {
+    const totalPaginas = Math.max(1, Math.ceil(articulosFiltrados.length / ITEMS_POR_PAGINA));
+    const nueva = paginaActualInventario + delta;
+    if (nueva < 1 || nueva > totalPaginas) return;
+    paginaActualInventario = nueva;
+    mostrarTabla(articulosFiltrados, 'tablaInventario');
+}
+
+function construirHtmlFilas(datos) {
+    let html = '';
+    datos.forEach(art => {
+        const claseAlerta = art.estado === 'En Bodega' ? obtenerClaseAlerta(art.fechaIngreso) : '';
+        const diasEnBodega = art.estado === 'En Bodega' ? calcularDiasEnBodega(art.fechaIngreso) : '-';
+        const fechaIngresoTexto = formatearFechaChile(art.fechaIngreso);
+        const numeroBodega = (typeof art.numeroBodega === 'string' && art.numeroBodega.trim())
+            ? art.numeroBodega
+            : 'Sin ubicación';
+        const estadoPago = (typeof art.estadoPago === 'string' && art.estadoPago.trim())
+            ? art.estadoPago
+            : 'Sin pago';
+        const estadoPagoClase = obtenerClaseEstadoPago(estadoPago);
+
+        html += `
+            <tr class="${claseAlerta}" data-articulo-id="${art.id}" data-estado="${escaparHtml(art.estado)}">
+                <td><strong>${String(art.id).padStart(4, '0')}</strong></td>
+                <td>${escaparHtml(art.rut)}</td>
+                <td>${escaparHtml(art.nombreCliente)}</td>
+                <td>${escaparHtml(art.tipoArticulo)}</td>
+                <td><small>${escaparHtml(art.descripcion)}</small></td>
+                <td><strong style="color: var(--location-highlight);">${escaparHtml(numeroBodega)}</strong></td>
+                <td><small>${escaparHtml(fechaIngresoTexto)}</small></td>
+                <td class="celda-tiempo"><strong class="${claseAlerta ? 'text-alerta' : ''}">${escaparHtml(String(diasEnBodega))}</strong></td>
+                <td class="estado-col celda-estado"><span class="status-badge ${art.estado === 'En Bodega' ? 'status-bodega' : 'status-entregado'}">${escaparHtml(art.estado)}</span></td>
+                <td class="estado-pago-col celda-estado-pago"><span class="estado-pago-badge estado-pago-${estadoPagoClase}">${escaparHtml(estadoPago)}</span></td>
+                <td><strong style="color: ${art.saldoPendiente > 0 ? 'var(--saldo-negative)' : 'var(--saldo-positive)'};">$${escaparHtml(formatearMoneda(art.saldoPendiente))}</strong></td>
+                <td class="action-buttons celda-acciones">${construirHtmlAccionesArticulo(art.id, art.estado)}</td>
+            </tr>
+        `;
+    });
+    return html;
+}
+
 function mostrarTabla(datos, elementoId) {
     const elemento = document.getElementById(elementoId);
     if (!elemento) {
@@ -374,9 +419,20 @@ function mostrarTabla(datos, elementoId) {
     }
 
     if (datos.length === 0) {
-        elemento.innerHTML = '<p style="text-align: center; padding: 40px; color: var(--text-muted);">No hay artículos para mostrar.</p>';
+        const esInventario = elementoId === 'tablaInventario';
+        if (esInventario) {
+            elemento.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📦</div><div class="empty-state-text">No hay artículos para mostrar</div><div class="empty-state-hint">Ingresa un artículo desde la pestaña "Ingresar Artículo"</div></div>';
+        } else {
+            elemento.innerHTML = '<p style="text-align: center; padding: 40px; color: var(--text-muted);">No se encontraron resultados.</p>';
+        }
         return;
     }
+
+    const usarPaginacion = elementoId === 'tablaInventario' && datos.length > ITEMS_POR_PAGINA;
+    const totalPaginas = usarPaginacion ? Math.ceil(datos.length / ITEMS_POR_PAGINA) : 1;
+    if (paginaActualInventario > totalPaginas) paginaActualInventario = totalPaginas;
+    const inicio = usarPaginacion ? (paginaActualInventario - 1) * ITEMS_POR_PAGINA : 0;
+    const datosPagina = usarPaginacion ? datos.slice(inicio, inicio + ITEMS_POR_PAGINA) : datos;
 
     let html = `
         <table>
@@ -399,42 +455,26 @@ function mostrarTabla(datos, elementoId) {
             <tbody>
     `;
 
-    datos.forEach(art => {
-        const claseAlerta = art.estado === 'En Bodega' ? obtenerClaseAlerta(art.fechaIngreso) : '';
-        const diasEnBodega = art.estado === 'En Bodega' ? calcularDiasEnBodega(art.fechaIngreso) : '-';
-        const fechaIngresoTexto = formatearFechaChile(art.fechaIngreso);
-        const numeroBodega = (typeof art.numeroBodega === 'string' && art.numeroBodega.trim())
-            ? art.numeroBodega
-            : 'Sin ubicación';
-        const estadoPago = (typeof art.estadoPago === 'string' && art.estadoPago.trim())
-            ? art.estadoPago
-            : 'Sin pago';
-        const estadoPagoClase = obtenerClaseEstadoPago(estadoPago);
-
-        html += `
-            <tr class="${claseAlerta}" data-articulo-id="${art.id}" data-estado="${escaparHtml(art.estado)}">
-                <td><strong>${String(art.id).padStart(4, '0')}</strong></td>
-                <td>${escaparHtml(art.rut)}</td>
-                <td>${escaparHtml(art.nombreCliente)}</td>
-                <td>${escaparHtml(art.tipoArticulo)}</td>
-                <td><small>${escaparHtml(art.descripcion)}</small></td>
-                <td><strong style="color: var(--location-highlight);">${escaparHtml(numeroBodega)}</strong></td>
-                <td><small>${escaparHtml(fechaIngresoTexto)}</small></td>
-                <td class="celda-tiempo"><strong class="${claseAlerta ? 'text-alerta' : ''}">${diasEnBodega}</strong></td>
-                <td class="estado-col celda-estado"><span class="status-badge ${art.estado === 'En Bodega' ? 'status-bodega' : 'status-entregado'}">${escaparHtml(art.estado)}</span></td>
-                <td class="estado-pago-col celda-estado-pago"><span class="estado-pago-badge estado-pago-${estadoPagoClase}">${escaparHtml(estadoPago)}</span></td>
-                <td><strong style="color: ${art.saldoPendiente > 0 ? 'var(--saldo-negative)' : 'var(--saldo-positive)'};">$${formatearMoneda(art.saldoPendiente)}</strong></td>
-                <td class="action-buttons celda-acciones">${construirHtmlAccionesArticulo(art.id, art.estado)}</td>
-            </tr>
-        `;
-    });
-
+    html += construirHtmlFilas(datosPagina);
     html += '</tbody></table>';
+
+    if (usarPaginacion) {
+        html += `
+            <div class="pagination">
+                <button class="btn btn-secondary btn-small" onclick="cambiarPaginaInventario(-1)" ${paginaActualInventario <= 1 ? 'disabled' : ''}>← Anterior</button>
+                <span class="pagination-info">Página ${paginaActualInventario} de ${totalPaginas} (${datos.length} artículos)</span>
+                <button class="btn btn-secondary btn-small" onclick="cambiarPaginaInventario(1)" ${paginaActualInventario >= totalPaginas ? 'disabled' : ''}>Siguiente →</button>
+            </div>
+        `;
+    }
+
     elemento.innerHTML = html;
 }
 
 
 async function exportarDatos() {
+    const btn = document.querySelector('[onclick="exportarDatos()"]');
+    setBtnLoading(btn, true);
     try {
         const articulos = await window.electronAPI.obtenerTodos();
 
@@ -474,6 +514,8 @@ async function exportarDatos() {
     } catch (error) {
         console.error('Error exportando CSV de inventario:', error);
         mostrarNotificacion(`❌ Error exportando CSV: ${error.message}`, true);
+    } finally {
+        setBtnLoading(btn, false);
     }
 }
 
@@ -492,7 +534,14 @@ async function migrarDesdeLocalStorage() {
         peligro: true
     });
     if (confirmacion) {
-        const resultado = await window.electronAPI.migrarDesdeLocalStorage(datosAntiguos);
+        let resultado;
+        try {
+            resultado = await window.electronAPI.migrarDesdeLocalStorage(datosAntiguos);
+        } catch (error) {
+            console.error('Error en migración desde LocalStorage:', error);
+            mostrarNotificacion(`❌ Error en migración: ${error.message}`, true);
+            return;
+        }
 
         if (resultado.success) {
             mostrarNotificacion(`✅ Migrados ${resultado.migrados ?? resultado.total} artículos correctamente`);

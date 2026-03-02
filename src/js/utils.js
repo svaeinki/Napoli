@@ -2,19 +2,26 @@
 // UTILIDADES GENERALES
 // ============================================
 
+let _notificacionTimerId = null;
+
 function mostrarNotificacion(mensaje, esError = false) {
     const notif = document.getElementById('notification');
     if (!notif) {
-        console.warn('No se encontró #notification para mostrar mensaje:', mensaje);
+        console.error('No se encontró #notification para mostrar mensaje:', mensaje);
         return;
+    }
+
+    if (_notificacionTimerId) {
+        clearTimeout(_notificacionTimerId);
     }
 
     notif.textContent = mensaje;
     notif.className = 'notification' + (esError ? ' error' : '');
     notif.style.display = 'block';
 
-    setTimeout(() => {
+    _notificacionTimerId = setTimeout(() => {
         notif.style.display = 'none';
+        _notificacionTimerId = null;
     }, 3000);
 }
 
@@ -244,6 +251,11 @@ async function confirmarAccionAsync({ titulo = 'Confirmar acción', mensaje = ''
         }
     }, { signal });
 
+    if (typeof modal.querySelector === 'function') {
+        const modalContent = modal.querySelector('.modal-content-confirmacion') || modal.querySelector('.modal-content');
+        activarFocusTrap(modalContent, signal);
+    }
+
     return await new Promise((resolve) => {
         resolverConfirmacionPendiente = resolve;
     });
@@ -277,7 +289,10 @@ function showTab(tabName) {
     }
 
     document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab').forEach(t => {
+        t.classList.remove('active');
+        t.setAttribute('aria-selected', 'false');
+    });
 
     const tabContent = document.getElementById(tabName);
     if (tabContent) {
@@ -290,6 +305,7 @@ function showTab(tabName) {
 
     if (targetButton) {
         targetButton.classList.add('active');
+        targetButton.setAttribute('aria-selected', 'true');
     }
 
     if (tabName === 'inventario') {
@@ -594,6 +610,55 @@ function obtenerClaseEstadoPago(estadoPago) {
     if (estado === 'pagado') return 'pagado';
     if (estado === 'abonado') return 'abonado';
     return 'sin';
+}
+
+function activarFocusTrap(modalElement, signal) {
+    if (!modalElement) return;
+    const FOCUSABLE = 'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+    modalElement.addEventListener('keydown', (event) => {
+        if (event.key !== 'Tab') return;
+        const focusables = Array.from(modalElement.querySelectorAll(FOCUSABLE)).filter(
+            (el) => el.offsetParent !== null
+        );
+        if (focusables.length === 0) return;
+
+        const first = focusables[0];
+        const last = focusables[focusables.length - 1];
+
+        if (event.shiftKey) {
+            if (document.activeElement === first) {
+                event.preventDefault();
+                last.focus();
+            }
+        } else {
+            if (document.activeElement === last) {
+                event.preventDefault();
+                first.focus();
+            }
+        }
+    }, { signal });
+
+    const firstFocusable = modalElement.querySelector(FOCUSABLE);
+    if (firstFocusable) {
+        setTimeout(() => firstFocusable.focus(), 0);
+    }
+}
+
+function setBtnLoading(btn, loading) {
+    if (!btn) return;
+    if (loading) {
+        btn.classList.add('btn-loading');
+        btn.disabled = true;
+        btn.dataset.prevText = btn.textContent;
+    } else {
+        btn.classList.remove('btn-loading');
+        btn.disabled = false;
+        if (btn.dataset.prevText) {
+            btn.textContent = btn.dataset.prevText;
+            delete btn.dataset.prevText;
+        }
+    }
 }
 
 function escaparHtml(texto) {

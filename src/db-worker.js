@@ -3,6 +3,21 @@ const DatabaseManager = require('./database');
 
 let db = null;
 
+const ALLOWED_DB_OPS = new Set([
+    'insertar',
+    'obtenerTodos',
+    'obtenerPorId',
+    'actualizarEstado',
+    'eliminar',
+    'buscar',
+    'obtenerEstadisticas',
+    'migrarDesdeLocalStorage',
+    'registrarAbono',
+    'obtenerAbonosArticulo',
+    'actualizarValorTotal',
+    'crearBackup'
+]);
+
 function ensureDb() {
     if (!db) {
         throw new Error('Base de datos no inicializada en worker');
@@ -14,59 +29,29 @@ function initDb() {
 }
 
 async function handleOperation(op, args = []) {
-    switch (op) {
-    case 'insertar':
-        ensureDb();
-        return db.insertar(args[0]);
-    case 'obtenerTodos':
-        ensureDb();
-        return db.obtenerTodos();
-    case 'obtenerPorId':
-        ensureDb();
-        return db.obtenerPorId(args[0]);
-    case 'actualizarEstado':
-        ensureDb();
-        return db.actualizarEstado(args[0], args[1]);
-    case 'eliminar':
-        ensureDb();
-        return db.eliminar(args[0]);
-    case 'buscar':
-        ensureDb();
-        return db.buscar(args[0]);
-    case 'obtenerEstadisticas':
-        ensureDb();
-        return db.obtenerEstadisticas();
-    case 'migrarDesdeLocalStorage':
-        ensureDb();
-        return db.migrarDesdeLocalStorage(args[0]);
-    case 'registrarAbono':
-        ensureDb();
-        return db.registrarAbono(args[0], args[1], args[2], args[3]);
-    case 'obtenerAbonosArticulo':
-        ensureDb();
-        return db.obtenerAbonosArticulo(args[0]);
-    case 'actualizarValorTotal':
-        ensureDb();
-        return db.actualizarValorTotal(args[0], args[1]);
-    case 'crearBackup':
-        ensureDb();
-        return await db.crearBackup(args[0]);
-    case 'cerrar':
+    if (op === 'cerrar') {
         if (db) {
             db.cerrar();
             db = null;
         }
         return { success: true };
-    case 'reabrir':
+    }
+    if (op === 'reabrir') {
         if (db) {
             db.cerrar();
             db = null;
         }
         initDb();
         return { success: true };
-    default:
+    }
+    if (!ALLOWED_DB_OPS.has(op)) {
         throw new Error(`Operación DB no soportada: ${op}`);
     }
+    ensureDb();
+    if (typeof db[op] !== 'function') {
+        throw new Error(`Operación DB no implementada: ${op}`);
+    }
+    return await db[op](...args);
 }
 
 function postMessage(message) {

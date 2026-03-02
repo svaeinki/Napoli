@@ -23,8 +23,15 @@ function toggleTheme() {
 function cargarTemaGuardado() {
     const temaGuardado = localStorage.getItem('theme');
     const themeIcon = document.getElementById('themeIcon');
-    
+
+    let usarOscuro = false;
     if (temaGuardado === 'dark') {
+        usarOscuro = true;
+    } else if (temaGuardado === null && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        usarOscuro = true;
+    }
+
+    if (usarOscuro) {
         document.body.classList.add('dark-theme');
         if (themeIcon) themeIcon.textContent = '☀️';
     }

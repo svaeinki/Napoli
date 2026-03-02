@@ -1,4 +1,4 @@
-let modalConfigEscHandler = null;
+let modalConfigAbortController = null;
 
 const TICKET_TEXTOS_DEFAULT = {
     header: 'NAPOLI\nReparadora de Calzado',
@@ -69,30 +69,31 @@ async function abrirConfiguracion() {
     const modalContent = modalConfig.querySelector('.modal-content');
     if (modalContent) {
         modalContent.scrollTop = 0;
-        if (!modalContent.dataset.stopPropagationBound) {
-            modalContent.addEventListener('click', (event) => {
-                event.stopPropagation();
-            });
-            modalContent.dataset.stopPropagationBound = '1';
-        }
     }
 
-    if (modalConfigEscHandler) {
-        document.removeEventListener('keydown', modalConfigEscHandler);
+    if (modalConfigAbortController) {
+        modalConfigAbortController.abort();
     }
-    modalConfigEscHandler = (event) => {
+    modalConfigAbortController = new AbortController();
+    const { signal } = modalConfigAbortController;
+
+    if (modalContent) {
+        modalContent.addEventListener('click', (event) => {
+            event.stopPropagation();
+        }, { signal });
+    }
+    document.addEventListener('keydown', (event) => {
         if (event.key !== 'Escape') return;
         if (!document.getElementById('modal-config')) return;
         event.preventDefault();
         cerrarConfiguracion();
-    };
-    document.addEventListener('keydown', modalConfigEscHandler);
+    }, { signal });
 }
 
 function cerrarConfiguracion() {
-    if (modalConfigEscHandler) {
-        document.removeEventListener('keydown', modalConfigEscHandler);
-        modalConfigEscHandler = null;
+    if (modalConfigAbortController) {
+        modalConfigAbortController.abort();
+        modalConfigAbortController = null;
     }
     const container = document.getElementById('modalConfigContainer');
     if (container) {

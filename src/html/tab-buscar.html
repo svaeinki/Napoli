@@ -1,7 +1,11 @@
 <h2>Buscar Artículos</h2>
 
 <div class="search-box">
-    <input type="text" id="campoBuscar" placeholder="🔍 Buscar por RUT, nombre, número de bodega, tipo de artículo..." oninput="buscarArticulosDebounced()">
+    <div class="search-wrapper">
+        <input type="text" id="campoBuscar" placeholder="🔍 Buscar por RUT, nombre, número de bodega, tipo de artículo..." oninput="buscarArticulosDebounced(); toggleSearchClear()" style="padding-right: 36px;">
+        <button id="btnLimpiarBusqueda" class="search-clear" onclick="limpiarBusqueda()" aria-label="Limpiar búsqueda">&times;</button>
+    </div>
+    <div id="searchResultCount" class="search-result-count"></div>
 </div>
 
 <div class="table-container" id="resultadosBusqueda"></div>

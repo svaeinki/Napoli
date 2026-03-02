@@ -94,6 +94,7 @@ async function mostrarModalPago(id) {
     }, { signal: modalPagoAbortController.signal });
 
     modal.style.display = 'block';
+    activarFocusTrap(modalContent, modalPagoAbortController.signal);
     } catch (error) {
         console.error('Error mostrando modal de pago:', error);
         mostrarNotificacion(`❌ Error al cargar información de pagos: ${error.message}`, true);
@@ -102,7 +103,7 @@ async function mostrarModalPago(id) {
 
 async function registrarNuevoAbono() {
     const btnRegistrar = document.querySelector('#modalPago .btn-success[onclick*="registrarNuevoAbono"]');
-    if (btnRegistrar) btnRegistrar.disabled = true;
+    setBtnLoading(btnRegistrar, true);
 
     try {
         const modal = document.getElementById('modalPago');
@@ -144,7 +145,7 @@ async function registrarNuevoAbono() {
         console.error('Error registrando abono:', error);
         mostrarNotificacion(`❌ Error al registrar abono: ${error.message}`, true);
     } finally {
-        if (btnRegistrar) btnRegistrar.disabled = false;
+        setBtnLoading(btnRegistrar, false);
     }
 }
 
@@ -159,8 +160,8 @@ async function actualizarValorServicio() {
             return;
         }
 
-        if (nuevoValor < 0) {
-            mostrarNotificacion('❌ Ingrese un valor válido', true);
+        if (nuevoValor <= 0) {
+            mostrarNotificacion('❌ Ingrese un valor válido mayor a cero', true);
             return;
         }
 

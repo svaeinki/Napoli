@@ -48,6 +48,9 @@ const PRINTER_CONFIG_DEFAULTS = Object.freeze({
     footer: 'Gracias por preferir Napoli\nConserve este ticket'
 });
 let restauracionEnCurso = false;
+let restauracionPromesa = null;
+const rutasAprobadasPorDialogo = new Set();
+const RUTAS_APROBADAS_MAX = 20;
 const generarTimestampUnico = createUniqueTimestampGenerator();
 
 function logDiag(type, payload = {}) {
@@ -303,7 +306,12 @@ async function restaurarBackupDB(rutaBackup) {
         return { success: false, restoredPath: null, rollbackUsed: false, error: 'Ya hay una restauración en curso' };
     }
 
+    if (restauracionPromesa) {
+        return await restauracionPromesa;
+    }
+
     restauracionEnCurso = true;
+    restauracionPromesa = (async () => {
     const timestamp = timestampIsoSeguro();
     const snapshotPath = path.join(BACKUPS_PATH, `napoli_pre_restore_${timestamp}.db`);
     let rollbackUsed = false;
@@ -426,7 +434,10 @@ async function restaurarBackupDB(rutaBackup) {
         };
     } finally {
         restauracionEnCurso = false;
+        restauracionPromesa = null;
     }
+    })();
+    return await restauracionPromesa;
 }
 
 function obtenerEstadoBackups() {
@@ -621,7 +632,7 @@ function guardarConfiguracion(config) {
 
 function abrirUrlExternaPermitida(url) {
     if (!esUrlExternaPermitida(url)) {
-        console.warn(`Bloqueada navegación externa no permitida: ${url}`);
+        console.error(`Bloqueada navegación externa no permitida: ${url}`);
         return false;
     }
 
@@ -649,7 +660,7 @@ function descifrarToken(tokenCifrado) {
         }
     } catch (error) {
         // Si falla el descifrado, asumir que es un token sin cifrar (migración)
-        console.warn('Token sin cifrar detectado, se cifrará en el próximo guardado');
+        console.error('Token sin cifrar detectado, se cifrará en el próximo guardado');
     }
     return tokenCifrado;
 }
@@ -717,6 +728,56 @@ function sanitizarConfigImpresora(printerConfig = {}) {
     };
 }
 
+function esRutaPermitidaParaBackup(rutaArchivo) {
+    if (!rutaArchivo || typeof rutaArchivo !== 'string') return false;
+    const rutaAbsoluta = path.resolve(rutaArchivo.trim());
+    if (rutaAbsoluta.startsWith(BACKUPS_PATH + path.sep) || rutaAbsoluta === BACKUPS_PATH) {
+        return true;
+    }
+    if (rutasAprobadasPorDialogo.has(rutaAbsoluta)) {
+        return true;
+    }
+    return false;
+}
+
+function registrarRutaAprobadaPorDialogo(ruta) {
+    if (!ruta || typeof ruta !== 'string') return;
+    const rutaAbsoluta = path.resolve(ruta.trim());
+    rutasAprobadasPorDialogo.add(rutaAbsoluta);
+    if (rutasAprobadasPorDialogo.size > RUTAS_APROBADAS_MAX) {
+        const primera = rutasAprobadasPorDialogo.values().next().value;
+        rutasAprobadasPorDialogo.delete(primera);
+    }
+}
+
+const LIMITE_STRING_CAMPO = 2000;
+const LIMITE_OBSERVACIONES = 5000;
+
+function sanitizarArticuloInput(articulo) {
+    if (!articulo || typeof articulo !== 'object') {
+        return { valid: false, error: 'Datos de artículo inválidos' };
+    }
+
+    const camposString = ['rut', 'nombreCliente', 'telefono', 'tipoArticulo', 'descripcion', 'numeroBodega', 'metodoPagoInicial'];
+    for (const campo of camposString) {
+        if (articulo[campo] !== null && articulo[campo] !== undefined && typeof articulo[campo] !== 'string') {
+            return { valid: false, error: `Campo "${campo}" debe ser texto` };
+        }
+        if (typeof articulo[campo] === 'string' && articulo[campo].length > LIMITE_STRING_CAMPO) {
+            return { valid: false, error: `Campo "${campo}" excede el límite de ${LIMITE_STRING_CAMPO} caracteres` };
+        }
+    }
+
+    if (typeof articulo.observaciones === 'string' && articulo.observaciones.length > LIMITE_OBSERVACIONES) {
+        return { valid: false, error: `Observaciones exceden el límite de ${LIMITE_OBSERVACIONES} caracteres` };
+    }
+    if (typeof articulo.observacionesAbonoInicial === 'string' && articulo.observacionesAbonoInicial.length > LIMITE_OBSERVACIONES) {
+        return { valid: false, error: `Observaciones del abono inicial exceden el límite de ${LIMITE_OBSERVACIONES} caracteres` };
+    }
+
+    return { valid: true };
+}
+
 function operacionBloqueadaPorRestore() {
     return restauracionEnCurso;
 }
@@ -777,7 +838,9 @@ function iniciarReintentoWorkerDb() {
             return;
         }
         if (dbService.getMode() === 'worker') {
-            workerRetryCount = 0; // Restaurado exitosamente, reiniciar contador
+            clearInterval(workerRetryTimer);
+            workerRetryTimer = null;
+            workerRetryCount = 0;
             return;
         }
         if (workerRetryCount >= DB_WORKER_MAX_RETRIES) {
@@ -849,7 +912,7 @@ app.whenReady().then(async () => {
         dbService = new DBService({ dbPath: DB_PATH, diagnostics });
         const initResult = await dbService.init();
         if (initResult.warning) {
-            console.warn(`⚠️ ${initResult.warning}`);
+            console.error(`DB init warning: ${initResult.warning}`);
         }
         iniciarReintentoWorkerDb();
     } catch (error) {
@@ -864,7 +927,7 @@ app.whenReady().then(async () => {
         const token = descifrarToken(config.dropboxToken);
         if (token) {
             if (!safeStorage.isEncryptionAvailable()) {
-                console.warn(`⚠️ ${WARNING_TOKEN_NO_CIFRADO}`);
+                console.error(`Token Dropbox: ${WARNING_TOKEN_NO_CIFRADO}`);
                 registrarDecisionOperativa({
                     code: OP_DECISION_DROPBOX_TOKEN_SIN_CIFRADO,
                     context: 'dropbox:auto_init',
@@ -965,6 +1028,8 @@ ipcMain.handle('db:insertar', async (_event, articulo) => {
     const bloqueo = respuestaBloqueoRestoreEscritura();
     if (bloqueo) return bloqueo;
     if (!dbService) return { success: false, error: 'Base de datos no inicializada' };
+    const validacion = sanitizarArticuloInput(articulo);
+    if (!validacion.valid) return { success: false, error: validacion.error };
     try {
         return await medirOperacionDb('db:insertar', () => dbService.insertar(articulo));
     } catch (error) {
@@ -1057,6 +1122,12 @@ ipcMain.handle('pago:registrarAbono', async (_event, articuloId, monto, metodoPa
     const bloqueo = respuestaBloqueoRestoreEscritura();
     if (bloqueo) return bloqueo;
     if (!dbService) return { success: false, error: 'Base de datos no inicializada' };
+    if (typeof metodoPago === 'string' && metodoPago.length > LIMITE_STRING_CAMPO) {
+        return { success: false, error: `Método de pago excede el límite de ${LIMITE_STRING_CAMPO} caracteres` };
+    }
+    if (typeof observaciones === 'string' && observaciones.length > LIMITE_OBSERVACIONES) {
+        return { success: false, error: `Observaciones exceden el límite de ${LIMITE_OBSERVACIONES} caracteres` };
+    }
     try {
         return await medirOperacionDb('pago:registrarAbono', () =>
             dbService.registrarAbono(articuloId, monto, metodoPago, observaciones)
@@ -1095,15 +1166,27 @@ ipcMain.handle('pago:actualizarValor', async (_event, articuloId, nuevoValor) =>
 // ============================================
 
 ipcMain.handle('backup:crear', async () => {
-    return crearBackupManual();
+    try {
+        return await crearBackupManual();
+    } catch (error) {
+        return payloadErrorOperacion(error);
+    }
 });
 
 ipcMain.handle('backup:exportarJSON', async () => {
-    return exportarJSON();
+    try {
+        return await exportarJSON();
+    } catch (error) {
+        return payloadErrorOperacion(error);
+    }
 });
 
 ipcMain.handle('backup:exportarExcel', async () => {
-    return exportarExcel();
+    try {
+        return await exportarExcel();
+    } catch (error) {
+        return payloadErrorOperacion(error);
+    }
 });
 
 ipcMain.handle('backup:abrirCarpeta', async () => {
@@ -1128,6 +1211,7 @@ ipcMain.handle('backup:seleccionarArchivoDB', async () => {
             return { success: true, canceled: true };
         }
 
+        registrarRutaAprobadaPorDialogo(result.filePaths[0]);
         return { success: true, canceled: false, path: result.filePaths[0] };
     } catch (error) {
         return { success: false, canceled: true, error: error.message };
@@ -1135,18 +1219,22 @@ ipcMain.handle('backup:seleccionarArchivoDB', async () => {
 });
 
 ipcMain.handle('backup:validarDB', async (_event, rutaArchivo) => {
+    if (!esRutaPermitidaParaBackup(rutaArchivo)) {
+        return { success: false, valid: false, error: 'Ruta no autorizada. Seleccione un archivo desde el selector de backups.' };
+    }
     const resultado = validarBackupDBInterno(rutaArchivo);
     registrarEstadoBackups({ lastValidation: construirLogValidacion(resultado, 'manual') });
     return resultado;
 });
 
 ipcMain.handle('backup:restaurarDB', async (_event, rutaBackup) => {
+    if (!esRutaPermitidaParaBackup(rutaBackup)) {
+        return { success: false, restoredPath: null, rollbackUsed: false, error: 'Ruta no autorizada. Seleccione un archivo desde el selector de backups.' };
+    }
     return await restaurarBackupDB(rutaBackup);
 });
 
 ipcMain.handle('backup:estado', async () => {
-    const bloqueo = respuestaBloqueoRestoreEscritura();
-    if (bloqueo) return bloqueo;
     try {
         return obtenerEstadoBackups();
     } catch (error) {
@@ -1154,72 +1242,23 @@ ipcMain.handle('backup:estado', async () => {
     }
 });
 
-async function crearBackupAutomatico() {
+async function crearBackupInterno({ prefijo = 'napoli_backup_', opLabel = 'backup:crear', estadoKey = 'lastAutomaticBackup', exigirDropbox = false, limpiar = false } = {}) {
     try {
         if (restauracionEnCurso) {
             return { success: false, error: 'Restauración en curso. Intente nuevamente al terminar.' };
         }
 
         const timestamp = timestampIsoSeguro();
-        const backupPath = path.join(BACKUPS_PATH, `napoli_backup_${timestamp}.db`);
+        const backupPath = path.join(BACKUPS_PATH, `${prefijo}${timestamp}.db`);
 
         if (!dbService) {
             throw new Error('Base de datos no inicializada');
         }
 
-        const backupDB = await medirOperacionDb('backup:crearAutomatico', () => dbService.crearBackup(backupPath));
+        const backupDB = await medirOperacionDb(opLabel, () => dbService.crearBackup(backupPath));
         if (!backupDB.success) {
             return backupDB;
         }
-
-        console.log('✅ Backup automático creado:', backupPath);
-
-        // Subir a Dropbox si está configurado
-        if (dropboxManager && dropboxManager.estaConfigurado()) {
-            const subida = await subirBackupDBConTimeout(backupPath);
-            if (!subida.success) {
-                console.warn('⚠️ Backup automático local creado, pero falló subida a Dropbox:', subida.error);
-            }
-        }
-
-        // Limpiar backups antiguos (mantener últimos 30 días)
-        limpiarBackupsAntiguos();
-
-        registrarEstadoBackups({
-            lastAutomaticBackup: {
-                timestamp: new Date().toISOString(),
-                path: backupPath
-            }
-        });
-
-        return { success: true, path: backupPath };
-    } catch (error) {
-        console.error('Error creando backup:', error);
-        return payloadErrorOperacion(error);
-    }
-}
-
-async function crearBackupManual(options = {}) {
-    const { exigirDropbox = false } = options;
-
-    try {
-        if (restauracionEnCurso) {
-            return { success: false, error: 'Restauración en curso. Intente nuevamente al terminar.' };
-        }
-
-        const timestamp = timestampIsoSeguro();
-        const backupPath = path.join(BACKUPS_PATH, `napoli_manual_${timestamp}.db`);
-
-        if (!dbService) {
-            throw new Error('Base de datos no inicializada');
-        }
-
-        const backupDB = await medirOperacionDb('backup:crearManual', () => dbService.crearBackup(backupPath));
-        if (!backupDB.success) {
-            return backupDB;
-        }
-
-        console.log('✅ Backup manual creado:', backupPath);
 
         // Subir a Dropbox si está configurado
         if (dropboxManager && dropboxManager.estaConfigurado()) {
@@ -1233,8 +1272,12 @@ async function crearBackupManual(options = {}) {
             }
         }
 
+        if (limpiar) {
+            limpiarBackupsAntiguos();
+        }
+
         registrarEstadoBackups({
-            lastManualBackup: {
+            [estadoKey]: {
                 timestamp: new Date().toISOString(),
                 path: backupPath
             }
@@ -1242,16 +1285,34 @@ async function crearBackupManual(options = {}) {
 
         return { success: true, path: backupPath };
     } catch (error) {
-        console.error('Error creando backup manual:', error);
+        console.error(`Error creando backup (${prefijo}):`, error);
         return payloadErrorOperacion(error);
     }
 }
 
+async function crearBackupAutomatico() {
+    return crearBackupInterno({
+        prefijo: 'napoli_backup_',
+        opLabel: 'backup:crearAutomatico',
+        estadoKey: 'lastAutomaticBackup',
+        limpiar: true
+    });
+}
+
+async function crearBackupManual(options = {}) {
+    const { exigirDropbox = false } = options;
+    return crearBackupInterno({
+        prefijo: 'napoli_manual_',
+        opLabel: 'backup:crearManual',
+        estadoKey: 'lastManualBackup',
+        exigirDropbox
+    });
+}
+
 async function exportarJSON() {
     try {
-        if (restauracionEnCurso) {
-            throw new Error('Restauración en curso. Intente nuevamente al terminar.');
-        }
+        const bloqueo = respuestaBloqueoRestoreEscritura();
+        if (bloqueo) return bloqueo;
 
         if (!dbService) {
             throw new Error('Base de datos no inicializada');
@@ -1267,9 +1328,11 @@ async function exportarJSON() {
 
         // Subir a Dropbox si está configurado
         if (dropboxManager && dropboxManager.estaConfigurado()) {
-            dropboxManager.subirBackupJSON(jsonPath).catch((error) => {
-                console.warn('⚠️ JSON exportado localmente, pero falló subida a Dropbox:', error.message);
-            });
+            try {
+                await dropboxManager.subirBackupJSON(jsonPath);
+            } catch (error) {
+                console.error('JSON exportado localmente, pero falló subida a Dropbox:', error.message);
+            }
         }
 
         return { success: true, filename: path.basename(jsonPath) };
@@ -1449,6 +1512,7 @@ function limpiarBackupsAntiguos() {
 
             if (
                 edad > diasMaximos &&
+                path.extname(archivo).toLowerCase() === '.db' &&
                 (
                     archivo.startsWith('napoli_backup_') ||
                     archivo.startsWith('napoli_manual_') ||
@@ -1516,7 +1580,11 @@ ipcMain.handle('dropbox:verificar', async () => {
     if (!dropboxManager || !dropboxManager.estaConfigurado()) {
         return { success: false, error: 'Dropbox no configurado' };
     }
-    return await dropboxManager.verificarConexion();
+    try {
+        return await dropboxManager.verificarConexion();
+    } catch (error) {
+        return payloadErrorOperacion(error);
+    }
 });
 
 ipcMain.handle('dropbox:estaConfigurado', async () => {
@@ -1539,11 +1607,19 @@ ipcMain.handle('dropbox:listarBackups', async () => {
     if (!dropboxManager || !dropboxManager.estaConfigurado()) {
         return { success: false, error: 'Dropbox no configurado' };
     }
-    return await dropboxManager.listarBackups();
+    try {
+        return await dropboxManager.listarBackups();
+    } catch (error) {
+        return payloadErrorOperacion(error);
+    }
 });
 
 ipcMain.handle('dropbox:subirBackupAhora', async () => {
-    return await subirBackupDropboxInmediato();
+    try {
+        return await subirBackupDropboxInmediato();
+    } catch (error) {
+        return payloadErrorOperacion(error);
+    }
 });
 
 // ============================================

@@ -326,13 +326,13 @@ class DatabaseManager {
             `),
 
             buscar: this.db.prepare(`
-                SELECT * FROM articulos 
+                SELECT * FROM articulos
                 WHERE id = ?
-                   OR rut LIKE ? 
-                   OR nombreCliente LIKE ? 
-                   OR numeroBodega LIKE ?
-                   OR tipoArticulo LIKE ?
-                   OR descripcion LIKE ?
+                   OR rut LIKE ? ESCAPE '\\'
+                   OR nombreCliente LIKE ? ESCAPE '\\'
+                   OR numeroBodega LIKE ? ESCAPE '\\'
+                   OR tipoArticulo LIKE ? ESCAPE '\\'
+                   OR descripcion LIKE ? ESCAPE '\\'
                 ORDER BY id DESC
                 LIMIT 50 -- Limitar resultados para mejorar rendimiento en UI
             `),
@@ -514,7 +514,9 @@ class DatabaseManager {
 
     buscar(termino) {
         try {
-            const terminoSafe = String(termino).slice(0, 500);
+            const terminoSafe = String(termino).slice(0, 500)
+                .replace(/%/g, '\\%')
+                .replace(/_/g, '\\_');
             const patron = `%${terminoSafe}%`;
             // Para el ID usamos el término exacto (si es número) o un valor imposible si no lo es
             // Pero como SQLite es flexible con tipos, pasamos el termino tal cual. 

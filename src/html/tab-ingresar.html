@@ -55,8 +55,9 @@
 
         <div class="form-group">
             <label>Abono Inicial 💵</label>
-            <input type="text" id="abonoInicial" placeholder="Ej: 5000" oninput="formatearNumeroInput(this)">
+            <input type="text" id="abonoInicial" placeholder="Ej: 5000" oninput="formatearNumeroInput(this); validarAbonoInline()">
             <small style="color: var(--text-muted);">Opcional - Se registrará al guardar</small>
+            <div id="abonoError" class="field-error">El abono no puede ser mayor al valor total</div>
         </div>
 
         <div class="form-group">

@@ -64,17 +64,20 @@ function normalizarConfigImpresion(config, fallback = CONFIG_IMPRESION_DEFAULT) 
 const Tickets = {
     // Configuración por defecto
     config: { ...CONFIG_IMPRESION_DEFAULT },
+    _configCargada: false,
 
     async init() {
         // Cargar configuración guardada
         const savedConfig = await window.electronAPI.obtenerConfiguracion();
         const printer = (savedConfig && savedConfig.printer) ? savedConfig.printer : {};
         this.config = normalizarConfigImpresion(printer, CONFIG_IMPRESION_DEFAULT);
+        this._configCargada = true;
     },
 
     async generarHTML(articulo, configOverride = null) {
-        // Asegurarse de tener la config actualizada
-        await this.init();
+        if (!this._configCargada) {
+            await this.init();
+        }
 
         const configEfectiva = (configOverride && typeof configOverride === 'object')
             ? normalizarConfigImpresion({ ...this.config, ...configOverride }, CONFIG_IMPRESION_DEFAULT)
@@ -194,6 +197,7 @@ const Tickets = {
             }
 
             this.config = configNormalizada;
+            this._configCargada = true;
             return { success: true };
         } catch (error) {
             return { success: false, error: error.message || 'Error guardando configuración' };

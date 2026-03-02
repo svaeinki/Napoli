@@ -10,7 +10,8 @@
 </head>
 
 <body>
-    <div class="notification" id="notification"></div>
+    <a href="#content-area" class="skip-link">Saltar al contenido</a>
+    <div class="notification" id="notification" role="alert" aria-live="assertive"></div>
 
     <div class="container">
         <div class="header">
@@ -30,19 +31,19 @@
             </div>
         </div>
 
-        <div class="tabs">
-            <button class="tab active" onclick="showTab('ingresar')">➕ Ingresar Artículo</button>
-            <button class="tab" onclick="showTab('inventario')">📦 Inventario</button>
-            <button class="tab" onclick="showTab('buscar')">🔍 Buscar</button>
-            <button class="tab" onclick="showTab('backup')">💾 Backups</button>
+        <div class="tabs" role="tablist">
+            <button class="tab active" role="tab" aria-selected="true" aria-controls="ingresar" id="tab-ingresar" onclick="showTab('ingresar')">➕ Ingresar Artículo</button>
+            <button class="tab" role="tab" aria-selected="false" aria-controls="inventario" id="tab-inventario" onclick="showTab('inventario')">📦 Inventario</button>
+            <button class="tab" role="tab" aria-selected="false" aria-controls="buscar" id="tab-buscar" onclick="showTab('buscar')">🔍 Buscar</button>
+            <button class="tab" role="tab" aria-selected="false" aria-controls="backup" id="tab-backup" onclick="showTab('backup')">💾 Backups</button>
         </div>
 
-        <div class="content">
+        <div class="content" id="content-area">
             <!-- Los tabs se cargarán dinámicamente aquí -->
-            <div id="ingresar" class="tab-content active"></div>
-            <div id="inventario" class="tab-content"></div>
-            <div id="buscar" class="tab-content"></div>
-            <div id="backup" class="tab-content"></div>
+            <div id="ingresar" class="tab-content active" role="tabpanel" aria-labelledby="tab-ingresar"></div>
+            <div id="inventario" class="tab-content" role="tabpanel" aria-labelledby="tab-inventario"></div>
+            <div id="buscar" class="tab-content" role="tabpanel" aria-labelledby="tab-buscar"></div>
+            <div id="backup" class="tab-content" role="tabpanel" aria-labelledby="tab-backup"></div>
         </div>
     </div>
 
