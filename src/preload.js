@@ -45,5 +45,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
     // Diagnóstico y runtime
     diagEvent: (payload) => ipcRenderer.invoke('diag:event', payload),
-    obtenerRuntimeInfo: () => ipcRenderer.invoke('app:runtimeInfo')
+    obtenerRuntimeInfo: () => ipcRenderer.invoke('app:runtimeInfo'),
+
+    // Sincronización experimental
+    syncConfigurarRemoto: (config) => ipcRenderer.invoke('sync:configurarRemoto', config),
+    syncEstado: () => ipcRenderer.invoke('sync:estado'),
+    syncEncolarOperacion: (operation) => ipcRenderer.invoke('sync:encolarOperacion', operation),
+    syncPushPendiente: () => ipcRenderer.invoke('sync:pushPendiente'),
+    syncPull: (cursor, limit) => ipcRenderer.invoke('sync:pull', cursor, limit)
 });

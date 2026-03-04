@@ -62,6 +62,24 @@ Sistema profesional de gestión de bodega para reparadora de calzado con base de
 
 Sigue las instrucciones específicas para tu sistema operativo para evitar problemas comunes de compilación.
 
+## 🧪 Laboratorio de migración (experimental)
+
+Para validar la estrategia `Electron + React Native + PostgreSQL + sync offline-first` sin tocar el flujo productivo:
+
+- Flujo de ramas: `docs/EXPERIMENTAL_BRANCH_WORKFLOW.md`
+- Workspace experimental: `experimental/`
+- Backend API (Fastify): `experimental/backend-api/`
+- Móvil RN scaffold: `experimental/mobile-rn/`
+- Importador SQLite -> backend: `experimental/migrations/import-sqlite-to-backend.js`
+
+Scripts útiles desde la raíz:
+
+```bash
+npm run exp:backend:test
+npm run exp:backend:start
+npm run exp:migrate:sqlite -- --db /ruta/a/napoli.db --api http://localhost:4500
+```
+
 ### Requisitos del Sistema
 
 | Requisito | Versión mínima | Versión recomendada |

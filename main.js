@@ -13,11 +13,16 @@ const {
     replaceFileAtomically,
     stageRestoreFile
 } = require('./src/sqlite-restore-utils');
+const SyncClient = require('./src/sync-client');
+const SyncRepository = require('./src/sync-repository');
+const { legacyToUuid } = require('./src/sync-id-map');
 
 let mainWindow;
 let dbService;
 let dropboxManager;
 let diagnostics;
+let syncClient;
+let syncRepository;
 let workerRetryTimer = null;
 let workerRetryCount = 0;
 
@@ -822,8 +827,149 @@ function obtenerRuntimeInfo() {
     return {
         success: true,
         dbMode: dbService ? dbService.getMode() : 'unavailable',
-        dbWarning: dbService ? dbService.getWarning() : 'Base de datos no inicializada'
+        dbWarning: dbService ? dbService.getWarning() : 'Base de datos no inicializada',
+        sync: syncRepository
+            ? syncRepository.getStatus()
+            : { configured: false, authenticated: false, pendingOps: 0 }
     };
+}
+
+function mapArticuloLocalToSyncPayload(articulo, { deleted = false } = {}) {
+    if (!articulo || typeof articulo !== 'object') {
+        return null;
+    }
+
+    const localId = String(articulo.id || '').trim();
+    if (!localId) {
+        return null;
+    }
+
+    const valorTotal = Number.isFinite(Number(articulo.valorTotal))
+        ? Number(articulo.valorTotal)
+        : 0;
+    const totalAbonado = Number.isFinite(Number(articulo.totalAbonado))
+        ? Number(articulo.totalAbonado)
+        : 0;
+    const saldoPendiente = Number.isFinite(Number(articulo.saldoPendiente))
+        ? Number(articulo.saldoPendiente)
+        : Math.max(valorTotal - totalAbonado, 0);
+
+    return {
+        id: legacyToUuid('articulo', localId),
+        rut: String(articulo.rut || '').trim(),
+        nombre_cliente: String(articulo.nombreCliente || '').trim(),
+        telefono: String(articulo.telefono || '').trim() || undefined,
+        tipo_articulo: String(articulo.tipoArticulo || '').trim(),
+        descripcion: String(articulo.descripcion || '').trim(),
+        numero_bodega: String(articulo.numeroBodega || '').trim() || undefined,
+        observaciones: String(articulo.observaciones || '').trim() || undefined,
+        estado: String(articulo.estado || 'En Bodega').trim(),
+        fecha_ingreso: String(articulo.fechaIngreso || '').trim(),
+        fecha_entrega: articulo.fechaEntrega || null,
+        valor_total: valorTotal,
+        total_abonado: totalAbonado,
+        saldo_pendiente: saldoPendiente,
+        estado_pago: String(articulo.estadoPago || 'Sin pago').trim(),
+        deleted_at: deleted ? new Date().toISOString() : null
+    };
+}
+
+function encolarOperacionSyncSegura(operation, context) {
+    if (!syncRepository || !operation) {
+        return null;
+    }
+
+    try {
+        const queued = syncRepository.queueOperation(operation);
+        logDiag('sync:queue', {
+            context,
+            entity: queued.entity,
+            op: queued.op,
+            op_id: queued.op_id
+        });
+        return queued;
+    } catch (error) {
+        console.error(`Error encolando operación sync (${context}):`, error);
+        logDiag('sync:queue', { context, ok: false, error: error.message });
+        return null;
+    }
+}
+
+async function encolarArticuloSyncPorId(articuloId, context) {
+    if (!syncRepository || !dbService) return null;
+
+    try {
+        const articulo = await dbService.obtenerPorId(articuloId);
+        if (!articulo) {
+            return null;
+        }
+        const payload = mapArticuloLocalToSyncPayload(articulo);
+        if (!payload) {
+            return null;
+        }
+
+        return encolarOperacionSyncSegura({
+            entity: 'articulo',
+            op: 'upsert',
+            payload
+        }, context);
+    } catch (error) {
+        console.error(`Error preparando sync de artículo (${context}):`, error);
+        logDiag('sync:queue', { context, ok: false, error: error.message });
+        return null;
+    }
+}
+
+function encolarDeleteArticuloSync(articuloId, context) {
+    if (!syncRepository) return null;
+
+    const localId = String(articuloId || '').trim();
+    if (!localId) return null;
+
+    return encolarOperacionSyncSegura({
+        entity: 'articulo',
+        op: 'delete',
+        payload: {
+            id: legacyToUuid('articulo', localId)
+        }
+    }, context);
+}
+
+async function encolarUltimoAbonoSync(articuloId, context) {
+    if (!syncRepository || !dbService) return null;
+
+    try {
+        const abonos = await dbService.obtenerAbonosArticulo(articuloId);
+        if (!Array.isArray(abonos) || abonos.length === 0) {
+            return null;
+        }
+
+        const ultimoAbono = abonos[abonos.length - 1];
+        if (!ultimoAbono || !ultimoAbono.id) {
+            return null;
+        }
+
+        const payload = {
+            id: legacyToUuid('abono', ultimoAbono.id),
+            articulo_id: legacyToUuid('articulo', articuloId),
+            monto: Number(ultimoAbono.monto || 0),
+            metodo_pago: String(ultimoAbono.metodoPago || 'Efectivo'),
+            observaciones: String(ultimoAbono.observaciones || '').trim() || undefined,
+            fecha: ultimoAbono.fecha
+                ? new Date(ultimoAbono.fecha).toISOString()
+                : new Date().toISOString()
+        };
+
+        return encolarOperacionSyncSegura({
+            entity: 'abono',
+            op: 'append',
+            payload
+        }, context);
+    } catch (error) {
+        console.error(`Error preparando sync de abono (${context}):`, error);
+        logDiag('sync:queue', { context, ok: false, error: error.message });
+        return null;
+    }
 }
 
 function iniciarReintentoWorkerDb() {
@@ -921,8 +1067,33 @@ app.whenReady().then(async () => {
         return;
     }
 
+    syncClient = new SyncClient({ diagnostics });
+    syncRepository = new SyncRepository({ syncClient, diagnostics });
+
     // Inicializar Dropbox si está configurado
     const config = cargarConfiguracion();
+    if (config.sync && typeof config.sync === 'object') {
+        const remoteConfig = {
+            baseUrl: String(config.sync.baseUrl || '').trim(),
+            username: String(config.sync.username || '').trim(),
+            password: descifrarToken(config.sync.passwordEncrypted),
+            deviceId: String(config.sync.deviceId || '').trim()
+        };
+
+        if (remoteConfig.baseUrl && remoteConfig.username) {
+            syncClient.configure(remoteConfig);
+            if (remoteConfig.password) {
+                try {
+                    await syncClient.login();
+                    logDiag('sync:auto_login', { success: true, baseUrl: remoteConfig.baseUrl });
+                } catch (error) {
+                    console.error('No se pudo autenticar sync remoto al inicio:', error.message);
+                    logDiag('sync:auto_login', { success: false, error: error.message });
+                }
+            }
+        }
+    }
+
     if (config.dropboxToken) {
         const token = descifrarToken(config.dropboxToken);
         if (token) {
@@ -994,6 +1165,8 @@ app.on('before-quit', (event) => {
                             await dbService.closeAll();
                             dbService = null;
                         }
+                        syncRepository = null;
+                        syncClient = null;
                     })
                     .catch((closeError) => {
                         console.error('Error cerrando servicio DB al salir:', closeError);
@@ -1021,6 +1194,114 @@ ipcMain.handle('app:runtimeInfo', async () => {
 });
 
 // ============================================
+// HANDLERS IPC - SINCRONIZACIÓN EXPERIMENTAL
+// ============================================
+
+ipcMain.handle('sync:configurarRemoto', async (_event, remoteConfig = {}) => {
+    if (!syncRepository) {
+        return { success: false, error: 'Sync repository no inicializado' };
+    }
+
+    const baseUrl = String(remoteConfig.baseUrl || '').trim().replace(/\/$/, '');
+    const username = String(remoteConfig.username || '').trim();
+    const password = String(remoteConfig.password || '').trim();
+    const deviceId = String(remoteConfig.deviceId || '').trim();
+    const rememberPassword = Boolean(remoteConfig.rememberPassword);
+
+    if (!baseUrl || !username || !password) {
+        return { success: false, error: 'baseUrl, username y password son obligatorios' };
+    }
+
+    try {
+        const status = await syncRepository.configureRemote({
+            baseUrl,
+            username,
+            password,
+            deviceId
+        });
+
+        const config = cargarConfiguracion();
+        config.sync = {
+            baseUrl,
+            username,
+            deviceId: status.deviceId
+        };
+
+        if (rememberPassword) {
+            config.sync.passwordEncrypted = cifrarToken(password);
+        } else {
+            delete config.sync.passwordEncrypted;
+        }
+
+        guardarConfiguracion(config);
+
+        return { success: true, status };
+    } catch (error) {
+        return payloadErrorOperacion(error);
+    }
+});
+
+ipcMain.handle('sync:estado', async () => {
+    if (!syncRepository) {
+        return {
+            success: true,
+            status: { configured: false, authenticated: false, pendingOps: 0 }
+        };
+    }
+    return { success: true, status: syncRepository.getStatus() };
+});
+
+ipcMain.handle('sync:encolarOperacion', async (_event, operation = {}) => {
+    if (!syncRepository) {
+        return { success: false, error: 'Sync repository no inicializado' };
+    }
+
+    const entity = String(operation.entity || '').trim();
+    const op = String(operation.op || '').trim();
+    const payload = operation.payload && typeof operation.payload === 'object'
+        ? operation.payload
+        : null;
+
+    if (!entity || !op || !payload) {
+        return { success: false, error: 'entity, op y payload son obligatorios' };
+    }
+
+    try {
+        const queued = syncRepository.queueOperation({
+            entity,
+            op,
+            payload,
+            clientUpdatedAt: operation.client_updated_at
+        });
+        return { success: true, queued };
+    } catch (error) {
+        return payloadErrorOperacion(error);
+    }
+});
+
+ipcMain.handle('sync:pushPendiente', async () => {
+    if (!syncRepository) {
+        return { success: false, error: 'Sync repository no inicializado' };
+    }
+    try {
+        return await syncRepository.pushPending();
+    } catch (error) {
+        return payloadErrorOperacion(error);
+    }
+});
+
+ipcMain.handle('sync:pull', async (_event, cursor, limit = 500) => {
+    if (!syncRepository) {
+        return { success: false, error: 'Sync repository no inicializado' };
+    }
+    try {
+        return await syncRepository.pull(cursor, limit);
+    } catch (error) {
+        return payloadErrorOperacion(error);
+    }
+});
+
+// ============================================
 // HANDLERS IPC - BASE DE DATOS
 // ============================================
 
@@ -1031,7 +1312,11 @@ ipcMain.handle('db:insertar', async (_event, articulo) => {
     const validacion = sanitizarArticuloInput(articulo);
     if (!validacion.valid) return { success: false, error: validacion.error };
     try {
-        return await medirOperacionDb('db:insertar', () => dbService.insertar(articulo));
+        const resultado = await medirOperacionDb('db:insertar', () => dbService.insertar(articulo));
+        if (resultado && resultado.success && resultado.id) {
+            await encolarArticuloSyncPorId(resultado.id, 'db:insertar');
+        }
+        return resultado;
     } catch (error) {
         return payloadErrorOperacion(error);
     }
@@ -1064,7 +1349,11 @@ ipcMain.handle('db:actualizarEstado', async (_event, id, nuevoEstado) => {
     if (bloqueo) return bloqueo;
     if (!dbService) return { success: false, error: 'Base de datos no inicializada' };
     try {
-        return await medirOperacionDb('db:actualizarEstado', () => dbService.actualizarEstado(id, nuevoEstado));
+        const resultado = await medirOperacionDb('db:actualizarEstado', () => dbService.actualizarEstado(id, nuevoEstado));
+        if (resultado && resultado.success) {
+            await encolarArticuloSyncPorId(id, 'db:actualizarEstado');
+        }
+        return resultado;
     } catch (error) {
         return payloadErrorOperacion(error);
     }
@@ -1075,7 +1364,11 @@ ipcMain.handle('db:eliminar', async (_event, id) => {
     if (bloqueo) return bloqueo;
     if (!dbService) return { success: false, error: 'Base de datos no inicializada' };
     try {
-        return await medirOperacionDb('db:eliminar', () => dbService.eliminar(id));
+        const resultado = await medirOperacionDb('db:eliminar', () => dbService.eliminar(id));
+        if (resultado && resultado.success) {
+            encolarDeleteArticuloSync(id, 'db:eliminar');
+        }
+        return resultado;
     } catch (error) {
         return payloadErrorOperacion(error);
     }
@@ -1129,9 +1422,14 @@ ipcMain.handle('pago:registrarAbono', async (_event, articuloId, monto, metodoPa
         return { success: false, error: `Observaciones exceden el límite de ${LIMITE_OBSERVACIONES} caracteres` };
     }
     try {
-        return await medirOperacionDb('pago:registrarAbono', () =>
+        const resultado = await medirOperacionDb('pago:registrarAbono', () =>
             dbService.registrarAbono(articuloId, monto, metodoPago, observaciones)
         );
+        if (resultado && resultado.success) {
+            await encolarUltimoAbonoSync(articuloId, 'pago:registrarAbono');
+            await encolarArticuloSyncPorId(articuloId, 'pago:registrarAbono');
+        }
+        return resultado;
     } catch (error) {
         return payloadErrorOperacion(error);
     }
@@ -1153,9 +1451,13 @@ ipcMain.handle('pago:actualizarValor', async (_event, articuloId, nuevoValor) =>
     if (bloqueo) return bloqueo;
     if (!dbService) return { success: false, error: 'Base de datos no inicializada' };
     try {
-        return await medirOperacionDb('pago:actualizarValor', () =>
+        const resultado = await medirOperacionDb('pago:actualizarValor', () =>
             dbService.actualizarValorTotal(articuloId, nuevoValor)
         );
+        if (resultado && resultado.success) {
+            await encolarArticuloSyncPorId(articuloId, 'pago:actualizarValor');
+        }
+        return resultado;
     } catch (error) {
         return payloadErrorOperacion(error);
     }

@@ -1,0 +1,24 @@
+{
+  "name": "napoli-backend-api-experiment",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Backend API experimental para migracion Napoli (Fastify + PostgreSQL + sync offline-first)",
+  "main": "src/index.js",
+  "scripts": {
+    "dev": "node --watch src/index.js",
+    "start": "node src/index.js",
+    "test": "node --test test/*.test.js",
+    "seed": "node src/seed.js",
+    "check": "node --check src/index.js && node --check src/app.js"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "fastify": "^5.6.1",
+    "jsonwebtoken": "^9.0.2",
+    "pg": "^8.16.3",
+    "zod": "^3.25.76"
+  }
+}

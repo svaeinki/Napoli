@@ -1,0 +1,11 @@
+{
+  "expo": {
+    "name": "Napoli Mobile Experiment",
+    "slug": "napoli-mobile-experiment",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "sdkVersion": "54.0.0",
+    "platforms": ["android", "ios"],
+    "assetBundlePatterns": ["**/*"]
+  }
+}

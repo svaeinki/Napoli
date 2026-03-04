@@ -16,7 +16,11 @@
     "check:audit": "npm audit --omit=dev --audit-level=high",
     "check:build-current": "node scripts/check-build-current.js",
     "check:build-win": "electron-builder --win --publish never",
-    "release:check": "npm run check:syntax && npm run check:audit && npm run check:build-current"
+    "release:check": "npm run check:syntax && npm run check:audit && npm run check:build-current",
+    "exp:backend:test": "npm --prefix experimental/backend-api test",
+    "exp:backend:start": "npm --prefix experimental/backend-api start",
+    "exp:backend:seed": "npm --prefix experimental/backend-api run seed",
+    "exp:migrate:sqlite": "node experimental/migrations/import-sqlite-to-backend.js"
   },
   "keywords": [
     "electron",
