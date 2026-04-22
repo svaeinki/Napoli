@@ -28,6 +28,14 @@
   ],
   "author": "Diego Moreno",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/svaeinki/Napoli.git"
+  },
+  "bugs": {
+    "url": "https://github.com/svaeinki/Napoli/issues"
+  },
+  "homepage": "https://github.com/svaeinki/Napoli#readme",
   "engines": {
     "node": ">=20.0.0",
     "npm": ">=10.0.0"

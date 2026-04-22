@@ -15,7 +15,7 @@ test('esUrlExternaPermitida permite solo https en dominios allowlist', () => {
 });
 
 test('esFileUrl detecta navegación interna file://', () => {
-    assert.equal(esFileUrl('file:///C:/Users/diego/Developer/Napoli/src/index.html'), true);
+    assert.equal(esFileUrl('file:///C:/Program%20Files/Napoli%20Reparadora/resources/app/src/index.html'), true);
     assert.equal(esFileUrl('https://dropbox.com'), false);
     assert.equal(esFileUrl(null), false);
 });
