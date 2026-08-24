@@ -95,6 +95,30 @@ test('insertar rechaza abonoInicial negativo', (t) => {
     assert.equal(lista.length, 0);
 });
 
+test('CP-001: insertar rechaza rut vacío', (t) => {
+    const manager = withManager(t);
+    if (!manager) return;
+
+    const insert = manager.insertar(crearArticuloBase({ numeroBodega: 'CP-001', rut: '' }));
+
+    assert.equal(insert.success, false);
+    assert.match(String(insert.error || ''), /rut/i);
+    const lista = manager.obtenerTodos();
+    assert.equal(lista.length, 0);
+});
+
+test('CP-002: insertar rechaza valorTotal negativo', (t) => {
+    const manager = withManager(t);
+    if (!manager) return;
+
+    const insert = manager.insertar(crearArticuloBase({ numeroBodega: 'CP-002', valorTotal: -500 }));
+
+    assert.equal(insert.success, false);
+    assert.match(String(insert.error || ''), /valor total/i);
+    const lista = manager.obtenerTodos();
+    assert.equal(lista.length, 0);
+});
+
 test('si falla auditoría durante insertar, la transacción revierte (sin artículo parcial)', (t) => {
     const manager = withManager(t);
     if (!manager) return;

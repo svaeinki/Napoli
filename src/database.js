@@ -419,8 +419,23 @@ class DatabaseManager {
 
     insertar(articulo) {
         try {
-            const valorTotal = Number(articulo.valorTotal);
-            const valorTotalNum = Number.isFinite(valorTotal) && valorTotal >= 0 ? valorTotal : 0;
+            const camposObligatorios = [
+                ['rut', 'RUT'],
+                ['nombreCliente', 'nombre del cliente'],
+                ['tipoArticulo', 'tipo de artículo'],
+                ['descripcion', 'descripción']
+            ];
+            for (const [campo, etiqueta] of camposObligatorios) {
+                const valor = articulo[campo];
+                if (typeof valor !== 'string' || valor.trim() === '') {
+                    return { success: false, error: `El campo "${etiqueta}" es obligatorio` };
+                }
+            }
+
+            const valorTotalNum = Number(articulo.valorTotal);
+            if (!Number.isFinite(valorTotalNum) || valorTotalNum < 0) {
+                return { success: false, error: 'El valor total debe ser un número mayor o igual a 0' };
+            }
             const abonoInicialInput = articulo.abonoInicial;
             const abonoInicialRaw = (
                 abonoInicialInput === null ||
