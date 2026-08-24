@@ -123,15 +123,15 @@ Requires Node.js ≥ 20.
 ```bash
 git clone https://github.com/svaeinki/napoli.git
 cd napoli
-npm install
-npm run rebuild   # recompiles better-sqlite3 against Electron's Node ABI
-npm start
+pnpm install
+pnpm run rebuild   # recompiles better-sqlite3 against Electron's Node ABI
+pnpm start
 ```
 
 ### Run the test suite
 
 ```bash
-npm test
+pnpm test
 ```
 
 ### Build installers
@@ -139,15 +139,15 @@ npm test
 Installers should be built on their native OS for best results:
 
 ```bash
-npm run build-mac     # produces a .dmg
-npm run build-win     # produces an .exe (NSIS)
-npm run build-linux   # produces an .AppImage
+pnpm run build-mac     # produces a .dmg
+pnpm run build-win     # produces an .exe (NSIS)
+pnpm run build-linux   # produces an .AppImage
 ```
 
 Pre-release validation (syntax check + dependency audit + current-platform build):
 
 ```bash
-npm run release:check
+pnpm run release:check
 ```
 
 ### Release flow

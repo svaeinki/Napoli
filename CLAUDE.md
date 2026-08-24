@@ -9,31 +9,33 @@ Napoli is an **Electron desktop app** for managing a shoe repair shop's inventor
 ## Commands
 
 ```bash
-# Install and compile native modules (required after npm install)
-npm install && npm run rebuild
+# Install and compile native modules (required after pnpm install)
+pnpm install && pnpm run rebuild
 
 # Run the app in development
-npm start
+pnpm start
 
 # Run all tests
-npm test
+pnpm test
 
 # Run a single test file
 node --test scripts/tests/database-migration.test.js
 
 # Syntax check
-npm run check:syntax
+pnpm run check:syntax
 
 # Pre-release validation (syntax + audit + current-platform build)
-npm run release:check
+pnpm run release:check
 
 # Build installers (run on native OS for best results)
-npm run build-mac     # .dmg
-npm run build-win     # .exe (NSIS)
-npm run build-linux   # .AppImage
+pnpm run build-mac     # .dmg
+pnpm run build-win     # .exe (NSIS)
+pnpm run build-linux   # .AppImage
 ```
 
-**Note:** `better-sqlite3` is a native module. After updating Electron or Node versions, always run `npm run rebuild` to recompile it. Requires Node >=20.
+**Note:** `better-sqlite3` is a native module. After updating Electron or Node versions, always run `pnpm run rebuild` to recompile it (use `run` explicitly — pnpm's own built-in `pnpm rebuild` command is a different thing and rebuilds against plain Node, not Electron). Requires Node >=20.
+
+**Package manager:** This project uses **pnpm** (pinned via the `packageManager` field in `package.json`). Do not use `npm` or `yarn` — a mismatched package manager can produce a `node_modules` layout with `better-sqlite3` compiled against the wrong Node/Electron ABI, causing a `NODE_MODULE_VERSION` mismatch at startup.
 
 ## Architecture
 

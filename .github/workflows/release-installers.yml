@@ -16,23 +16,26 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
+          cache: pnpm
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Run tests
-        run: npm test
+        run: pnpm test
 
       - name: Check syntax
-        run: npm run check:syntax
+        run: pnpm run check:syntax
 
       - name: Audit runtime dependencies
-        run: npm run check:audit
+        run: pnpm run check:audit
 
   build:
     name: Build ${{ matrix.os_name }} installer
@@ -44,17 +47,17 @@ jobs:
         include:
           - os_name: Windows
             runner: windows-latest
-            build_command: npm run build-win -- --publish never
+            build_command: pnpm run build-win -- --publish never
             artifact_name: installer-windows
             artifact_glob: dist/*.exe
           - os_name: macOS
             runner: macos-15-intel
-            build_command: npm run build-mac -- --publish never
+            build_command: pnpm run build-mac -- --publish never
             artifact_name: installer-macos
             artifact_glob: dist/*.dmg
           - os_name: Linux
             runner: ubuntu-latest
-            build_command: npm run build-linux -- --publish never
+            build_command: pnpm run build-linux -- --publish never
             artifact_name: installer-linux
             artifact_glob: dist/*.AppImage
 
@@ -62,14 +65,17 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
+          cache: pnpm
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Build installer
         run: ${{ matrix.build_command }}

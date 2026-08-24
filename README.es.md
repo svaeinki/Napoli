@@ -67,7 +67,7 @@ Sigue las instrucciones específicas para tu sistema operativo para evitar probl
 | Requisito | Versión mínima | Versión recomendada |
 |-----------|---------------|---------------------|
 | Node.js   | **18.x LTS**  | 20.x o 22.x LTS     |
-| npm       | 8.x           | incluido con Node    |
+| pnpm      | 9.x           | 11.x — instala vía `corepack enable` o `npm i -g pnpm` |
 | Git       | cualquier     | —                   |
 
 > **Nota:** Node.js 16 ya no es compatible. Usa Node.js 18 o superior.
@@ -76,14 +76,14 @@ Sigue las instrucciones específicas para tu sistema operativo para evitar probl
 
 ```bash
 node --version   # debe ser v18.x o superior
-npm --version    # debe ser v8.x o superior
+pnpm --version   # debe ser v9.x o superior
 ```
 
 ---
 
 ### Dependencias nativas por plataforma
 
-La app incluye `better-sqlite3`, un módulo nativo que requiere compilación C++. Instala las herramientas correspondientes a tu sistema **antes** de ejecutar `npm install`.
+La app incluye `better-sqlite3`, un módulo nativo que requiere compilación C++. Instala las herramientas correspondientes a tu sistema **antes** de ejecutar `pnpm install`.
 
 #### macOS
 ```bash
@@ -126,13 +126,13 @@ git clone https://github.com/svaeinki/Napoli.git
 cd Napoli/zapateria-bodega
 
 # 2. Instalar dependencias
-npm install
+pnpm install
 
 # 3. Compilar módulos nativos (CRUCIAL para SQLite)
-npm run rebuild
+pnpm run rebuild
 
 # 4. Iniciar la aplicación
-npm start
+pnpm start
 ```
 
 ---
@@ -147,14 +147,14 @@ git clone https://github.com/svaeinki/Napoli.git
 cd Napoli/zapateria-bodega
 
 # 2. Instalar dependencias
-npm install
+pnpm install
 
 # 3. Compilar módulos nativos
 # Si este paso falla, verifica que Visual Studio Build Tools esté instalado.
-npm run rebuild
+pnpm run rebuild
 
 # 4. Iniciar la aplicación
-npm start
+pnpm start
 ```
 
 ---
@@ -195,14 +195,14 @@ Esta sección explica cómo empaquetar instaladores de la app para cada SO usand
 ### Requisitos previos (build)
 
 ```bash
-npm install
-npm run rebuild
+pnpm install
+pnpm run rebuild
 ```
 
 ### Build para Windows (NSIS `.exe`)
 
 ```bash
-npm run build-win
+pnpm run build-win
 ```
 
 Salida esperada:
@@ -211,7 +211,7 @@ Salida esperada:
 ### Build para macOS (`.dmg`)
 
 ```bash
-npm run build-mac
+pnpm run build-mac
 ```
 
 Salida esperada:
@@ -220,7 +220,7 @@ Salida esperada:
 ### Build para Linux (`.AppImage`)
 
 ```bash
-npm run build-linux
+pnpm run build-linux
 ```
 
 Salida esperada:
@@ -229,7 +229,7 @@ Salida esperada:
 ### Build combinada (Windows + macOS + Linux)
 
 ```bash
-npm run build
+pnpm run build
 ```
 
 Este script ejecuta:
@@ -240,7 +240,7 @@ Este script ejecuta:
 ### Validación mínima antes de build de release
 
 ```bash
-npm run release:check
+pnpm run release:check
 ```
 
 Valida:
@@ -255,7 +255,7 @@ Valida:
 Antes de publicar una versión, ejecuta:
 
 ```bash
-npm run release:check
+pnpm run release:check
 ```
 
 Este comando valida, en orden:
@@ -266,8 +266,8 @@ Este comando valida, en orden:
 Si cualquiera falla, la release no debe publicarse.
 
 Criterio de seguridad para producción:
-- El objetivo oficial es `npm audit --omit=dev` en `0` vulnerabilidades.
-- `npm install` puede mostrar alertas de dependencias de desarrollo y eso no bloquea release mientras `check:audit` esté en verde.
+- El objetivo oficial es `pnpm audit --prod` en `0` vulnerabilidades.
+- `pnpm install` puede mostrar alertas de dependencias de desarrollo y eso no bloquea release mientras `check:audit` esté en verde.
 
 ### 🚀 Release automático por tag (GitHub Releases)
 
@@ -279,7 +279,7 @@ git push origin vX.Y.Z
 ```
 
 Qué hace el workflow:
-1. Ejecuta un **quality gate** previo (`npm test`, `check:syntax`, `check:audit`).
+1. Ejecuta un **quality gate** previo (`pnpm test`, `check:syntax`, `check:audit`).
 2. Build en matriz por SO nativo: Windows, macOS y Linux.
 3. Genera instaladores `x64` por plataforma.
 4. Publica/actualiza el GitHub Release del tag.
@@ -336,7 +336,7 @@ Política operativa actual (uso interno, 1 usuaria):
 ```
 Error: The module '.../better_sqlite3.node' was compiled against a different Node.js version
 ```
-**Solución:** Ejecuta `npm run rebuild` para recompilar el módulo nativo para la versión de Electron instalada.
+**Solución:** Ejecuta `pnpm run rebuild` para recompilar el módulo nativo para la versión de Electron instalada.
 
 ### Advertencia de seguridad en macOS al abrir el instalador
 macOS muestra una advertencia porque la app no está firmada con un certificado de Apple Developer Program. Para abrirla de todos modos:
@@ -402,7 +402,7 @@ zapateria-bodega/
 - ✅ Workflow de release endurecido con quality gate previo (`test`, `check:syntax`, `check:audit`) antes de compilar instaladores.
 - 🧪 Nuevo check portable local: `check:build-current`, y `release:check` actualizado para no depender de cross-build de Windows desde macOS/Linux.
 - 🔧 Limpieza de tooling de rebuild: `postinstall`/`rebuild` migrados a `electron-builder install-app-deps` y remoción de `electron-rebuild` legacy.
-- 🛡️ Criterio de seguridad formalizado para producción: gate por `npm audit --omit=dev` (runtime).
+- 🛡️ Criterio de seguridad formalizado para producción: gate por `pnpm audit --prod` (runtime).
 - 🔐 Política explícita para Dropbox sin cifrado local: advertencia visible + registro de decisión operativa en `config.json`.
 - 📘 Documentación de política de firma actualizada para escenario interno de una usuaria.
 

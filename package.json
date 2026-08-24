@@ -3,6 +3,7 @@
   "version": "2.0.9",
   "description": "Sistema de gestión de bodega para Napoli - Reparadora de Calzado",
   "main": "main.js",
+  "packageManager": "pnpm@11.23.0",
   "scripts": {
     "postinstall": "electron-builder install-app-deps",
     "start": "node scripts/start-electron.js",
@@ -13,10 +14,10 @@
     "build-win": "electron-builder --win",
     "build-linux": "electron-builder --linux",
     "check:syntax": "node scripts/check-syntax.js",
-    "check:audit": "npm audit --omit=dev --audit-level=high",
+    "check:audit": "pnpm audit --prod --audit-level=high",
     "check:build-current": "node scripts/check-build-current.js",
     "check:build-win": "electron-builder --win --publish never",
-    "release:check": "npm run check:syntax && npm run check:audit && npm run check:build-current"
+    "release:check": "pnpm run check:syntax && pnpm run check:audit && pnpm run check:build-current"
   },
   "keywords": [
     "electron",
@@ -38,15 +39,12 @@
   "homepage": "https://github.com/svaeinki/Napoli#readme",
   "engines": {
     "node": ">=20.0.0",
-    "npm": ">=10.0.0"
+    "pnpm": ">=11.0.0"
   },
   "devDependencies": {
     "@electron/rebuild": "^4.0.3",
     "electron": "^40.6.0",
     "electron-builder": "^26.5.0"
-  },
-  "overrides": {
-    "node-gyp": "^10.0.0"
   },
   "dependencies": {
     "better-sqlite3": "^12.6.2",

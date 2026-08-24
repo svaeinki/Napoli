@@ -2,13 +2,13 @@ const { spawnSync } = require('child_process');
 
 function resolveBuildCommand(platform) {
     if (platform === 'darwin') {
-        return ['npm', ['run', 'build-mac', '--', '--publish', 'never']];
+        return ['pnpm', ['run', 'build-mac', '--', '--publish', 'never']];
     }
     if (platform === 'win32') {
-        return ['npm.cmd', ['run', 'build-win', '--', '--publish', 'never']];
+        return ['pnpm.cmd', ['run', 'build-win', '--', '--publish', 'never']];
     }
     if (platform === 'linux') {
-        return ['npm', ['run', 'build-linux', '--', '--publish', 'never']];
+        return ['pnpm', ['run', 'build-linux', '--', '--publish', 'never']];
     }
     return null;
 }
