@@ -7,7 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Bundled the **Archivo** variable font (`src/assets/fonts/`, SIL OFL 1.1) — loaded
+  locally via `@font-face`, so the CSP is unchanged and it works offline.
+
 ### Changed
+- **Visual redesign of the whole renderer** (styles and markup only — no changes to
+  behavior, texts, IDs, `onclick` handlers, JS, backend or data):
+  - New design tokens in `styles.css` for light and dark themes: neutral stone
+    background, white surfaces, ink text, and the Napoli burgundy reserved for the
+    primary action and the active tab.
+  - Typography: Archivo condensed for page titles, tabs and figures; normal width for
+    forms and tables; tabular numerals for amounts, RUTs and dates.
+  - "Pespunte" (stitch) motif: the logo sits on a stitched label, the active tab has a
+    stitched leather strip, and dashed stitch lines separate sections and modal headers.
+  - Compact header bar (logo cropped to fit, settings/theme as icon buttons) and
+    left-aligned underline tabs.
+  - Buttons: filled burgundy primary, outlined secondary/info, tinted
+    success/warning/danger that turn solid on hover; loading and disabled states kept.
+  - Forms: 40 px fields with a visible focus ring, custom select chevron, clearer
+    RUT valid/invalid and inline error states.
+  - Inventory/search tables: light sticky header, pill status badges with a dot,
+    colored side stripe on alert rows, no-wrap RUT/date columns and a sticky
+    **Actions** column on the right when the table scrolls horizontally.
+    "En Bodega" badge is now blue (was amber, same as "Abonado").
+  - Inventory stats shown as one divided panel; Backups tab laid out in two columns
+    (single column on narrow windows).
+  - Modals (payments, confirmation, settings, ticket preview) restyled; the settings
+    modal's inline `<style>` moved into `styles.css`.
+  - Template inline styles moved to classes (only JS-controlled `display` toggles remain).
+  - Respects `prefers-reduced-motion`.
+- Thermal ticket printing and its preview are intentionally untouched: new heading and
+  text rules are scoped to the app UI so `ticket.css` output does not change.
 - Package manager migrated to Yarn 4 (via Corepack, `nodeLinker: node-modules`);
   CI now installs with `yarn install --immutable`.
 - Spanish README is now the primary `README.md`; English moved to `README.en.md`.

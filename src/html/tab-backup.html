@@ -9,10 +9,10 @@
     
     <!-- Configuración (se muestra solo si no está conectado) -->
     <div id="dropboxConfig" style="display: none;">
-        <p style="margin-bottom: 10px; color: var(--text-muted);">
+        <p class="section-hint">
             Para conectar Dropbox (solo se hace una vez; la conexión se renueva sola):
         </p>
-        <ol style="margin-bottom: 15px; color: var(--text-muted); line-height: 1.8;">
+        <ol class="steps-list">
             <li>Ve a <a href="https://www.dropbox.com/developers/apps" target="_blank">Dropbox App Console</a> y haz click en "Create app"
                 (si ya tienes la app "ReparadoraNapoli", ábrela y salta al paso 4)</li>
             <li>Selecciona "Scoped access" y "Full Dropbox". Dale un nombre: "ReparadoraNapoli"</li>
@@ -23,8 +23,8 @@
             <input type="text" id="dropboxAppKey" placeholder="App key de tu app de Dropbox" autocomplete="off" spellcheck="false">
             <button class="btn btn-primary" onclick="iniciarAutorizacionDropbox()">🌐 Abrir autorización</button>
         </div>
-        <div id="dropboxPasoCodigo" style="display: none; margin-top: 15px;">
-            <p style="margin-bottom: 10px; color: var(--text-muted);">
+        <div id="dropboxPasoCodigo" class="dropbox-step" style="display: none;">
+            <p class="section-hint">
                 5. Se abrió Dropbox en el navegador. Pulsa "Permitir", copia el código que aparece y pégalo aquí:
             </p>
             <div class="input-group">
@@ -41,14 +41,14 @@
             <button class="btn btn-info" onclick="listarBackupsDropbox()">📋 Ver Backups en Dropbox</button>
             <button class="btn btn-danger" onclick="desconectarDropbox()">🔌 Desconectar</button>
         </div>
-        <div id="dropboxBackupsList" style="margin-top: 15px;"></div>
+        <div id="dropboxBackupsList" class="dropbox-list"></div>
     </div>
 </div>
 
 <!-- BACKUPS LOCALES -->
 <div class="backup-section">
     <h3>💾 Backups Locales</h3>
-    <p style="margin-bottom: 15px; color: var(--text-muted);">
+    <p class="section-hint">
         Los backups se crean automáticamente cada 24 horas. También puedes crear backups manuales cuando quieras.
     </p>
     <div class="backup-buttons">
@@ -59,9 +59,9 @@
 </div>
 
 <!-- CHECKLIST PRE-ACTUALIZACIÓN -->
-<div class="backup-section" style="margin-top: 20px;">
+<div class="backup-section">
     <h3>🛡️ Checklist Antes de Actualizar</h3>
-    <p style="margin-bottom: 15px; color: var(--text-muted);">
+    <p class="section-hint">
         Antes de instalar una nueva versión, verifica estos puntos para minimizar riesgo de pérdida de datos.
     </p>
     <ul class="upgrade-checklist">
@@ -75,29 +75,29 @@
 </div>
 
 <!-- RESTAURACIÓN -->
-<div class="backup-section" style="margin-top: 20px;">
+<div class="backup-section">
     <h3>♻️ Restaurar Backup DB</h3>
-    <p style="margin-bottom: 15px; color: var(--text-muted);">
+    <p class="section-hint">
         Use esta opción para recuperar una instalación nueva desde un backup SQLite (.db).
     </p>
     <div class="input-group">
         <input type="text" id="restoreBackupPath" placeholder="Seleccione un backup .db" readonly>
         <button class="btn btn-info" onclick="seleccionarBackupParaRestore()">📂 Seleccionar Backup</button>
     </div>
-    <div class="backup-buttons" style="margin-top: 10px;">
+    <div class="backup-buttons spaced">
         <button class="btn btn-warning" onclick="validarBackupSeleccionado()">🧪 Validar Backup</button>
         <button class="btn btn-danger" onclick="restaurarBackupSeleccionado()">♻️ Restaurar Backup</button>
     </div>
     <div id="restoreStatusBox" class="restore-status" style="display: none;"></div>
-    <small style="display: block; margin-top: 10px; color: var(--text-muted);">
+    <small class="section-footnote">
         El restore crea un snapshot automático previo y aplica rollback si detecta error.
     </small>
 </div>
 
 <!-- EXPORTACIÓN -->
-<div class="backup-section" style="margin-top: 20px;">
+<div class="backup-section">
     <h3>📊 Exportar Datos</h3>
-    <p style="margin-bottom: 15px; color: var(--text-muted);">
+    <p class="section-hint">
         Exporta tu inventario completo en diferentes formatos para análisis o respaldo.
     </p>
     <div class="backup-buttons">
@@ -107,9 +107,9 @@
 </div>
 
 <!-- INFORMACIÓN -->
-<div class="backup-section" style="margin-top: 20px;">
+<div class="backup-section section-wide">
     <h3>ℹ️ Información</h3>
-    <ul style="line-height: 2; color: var(--text-muted);">
+    <ul class="info-list">
         <li>✅ Backups automáticos cada 24 horas</li>
         <li>✅ Se guardan en formato .db (SQLite) y .json</li>
         <li>✅ Se mantienen los últimos 30 días localmente</li>

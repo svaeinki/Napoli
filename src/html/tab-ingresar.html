@@ -1,11 +1,11 @@
-<h2 style="margin-bottom: 20px;">Ingresar Nuevo Artículo</h2>
+<h2>Ingresar Nuevo Artículo</h2>
 <form id="formIngresar" onsubmit="ingresarArticulo(event)">
     <div class="form-grid">
         <div class="form-group">
             <label>RUT Cliente *</label>
             <input type="text" id="rut" placeholder="Ej: 12345678-9" required 
                    oninput="validarRUTEnTiempoReal(this)">
-            <small id="rutError" style="color: var(--state-error-text); display: none; margin-top: 5px;">RUT inválido</small>
+            <small id="rutError" class="rut-error" style="display: none;">RUT inválido</small>
         </div>
 
         <div class="form-group">
@@ -50,13 +50,13 @@
         <div class="form-group">
             <label>Valor del Servicio 💰</label>
             <input type="text" id="valorTotal" placeholder="Ej: 15000" oninput="formatearNumeroInput(this)">
-            <small style="color: var(--text-muted);">Dejar vacío o en 0 si no aplica</small>
+            <small>Dejar vacío o en 0 si no aplica</small>
         </div>
 
         <div class="form-group">
             <label>Abono Inicial 💵</label>
             <input type="text" id="abonoInicial" placeholder="Ej: 5000" oninput="formatearNumeroInput(this); validarAbonoInline()">
-            <small style="color: var(--text-muted);">Opcional - Se registrará al guardar</small>
+            <small>Opcional - Se registrará al guardar</small>
             <div id="abonoError" class="field-error">El abono no puede ser mayor al valor total</div>
         </div>
 
@@ -77,6 +77,8 @@
         </div>
     </div>
 
-    <button type="submit" class="btn btn-primary">💾 Guardar e Imprimir Ticket</button>
-    <button type="reset" class="btn btn-info">🔄 Limpiar Formulario</button>
+    <div class="form-actions">
+        <button type="submit" class="btn btn-primary">💾 Guardar e Imprimir Ticket</button>
+        <button type="reset" class="btn btn-info">🔄 Limpiar Formulario</button>
+    </div>
 </form>

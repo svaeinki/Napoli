@@ -1,14 +1,13 @@
 <div id="modalTicket" class="modal" role="dialog" aria-modal="true" aria-label="Vista previa del ticket">
-    <div class="modal-content" style="max-width: 400px; text-align: center;">
+    <div class="modal-content modal-content-ticket">
         <span class="close" onclick="cerrarModalTicket()" role="button" aria-label="Cerrar" tabindex="0">&times;</span>
         <h2>Vista Previa del Ticket</h2>
 
-        <div id="previewContainer"
-            style="margin: 20px auto; border: 1px solid var(--preview-border); padding: 10px; background: var(--preview-bg); display: inline-block;">
+        <div id="previewContainer" class="ticket-preview">
             <!-- Ticket content inject here -->
         </div>
 
-        <div style="margin-top: 20px;">
+        <div class="modal-actions">
             <button class="btn btn-primary" onclick="imprimirDesdePreview()">🖨 Imprimir</button>
             <button class="btn btn-secondary" onclick="cerrarModalTicket()">Cerrar</button>
         </div>
