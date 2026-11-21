@@ -70,6 +70,7 @@ class DatabaseManager {
             this.migrarNumeroBodegaOpcional();
             this.migrarFechasIngresoChile();
             this.migrarFechasEntregaChile();
+            this.corregirEstadoPagoSinAbonos();
         } catch (error) {
             console.error('Error en migración:', error);
             throw error;
@@ -217,6 +218,19 @@ class DatabaseManager {
             console.log(
                 `📊 Migración fechas entrega: revisadas=${filas.length}, migradas=${updates.length}, inválidas=${invalidas}`
             );
+        }
+    }
+
+    // Versiones anteriores marcaban 'Pagado' los artículos con valor 0 sin abonos.
+    corregirEstadoPagoSinAbonos() {
+        const resultado = this.db.prepare(`
+            UPDATE articulos
+            SET estadoPago = 'Sin pago'
+            WHERE COALESCE(totalAbonado, 0) <= 0
+              AND estadoPago = 'Pagado'
+        `).run();
+        if (resultado && resultado.changes > 0) {
+            console.log(`📊 Migración estado de pago: ${resultado.changes} artículo(s) sin abonos pasan a 'Sin pago'`);
         }
     }
 
@@ -372,18 +386,23 @@ class DatabaseManager {
                 SET totalAbonado = totalAbonado + ?,
                     saldoPendiente = MAX(0, valorTotal - (totalAbonado + ?)),
                     estadoPago = CASE
+                        WHEN (totalAbonado + ?) <= 0 THEN 'Sin pago'
                         WHEN (valorTotal - (totalAbonado + ?)) <= 0 THEN 'Pagado'
-                        WHEN (totalAbonado + ?) > 0 THEN 'Abonado'
-                        ELSE 'Sin pago'
+                        ELSE 'Abonado'
                     END,
                     fechaModificacion = CURRENT_TIMESTAMP
                 WHERE id = ?
             `),
 
+            // 'fecha' se guarda con CURRENT_TIMESTAMP (UTC, sin zona: "AAAA-MM-DD HH:MM:SS").
+            // Se entrega como ISO con 'Z' para que el renderer no la interprete como hora local.
             obtenerAbonosArticulo: this.db.prepare(`
-                SELECT * FROM abonos
+                SELECT
+                    id, articuloId, monto, metodoPago, observaciones,
+                    COALESCE(strftime('%Y-%m-%dT%H:%M:%SZ', fecha), fecha) AS fecha
+                FROM abonos
                 WHERE articuloId = ?
-                ORDER BY fecha DESC
+                ORDER BY abonos.fecha DESC, abonos.id DESC
             `),
 
             actualizarValorTotal: this.db.prepare(`
@@ -391,14 +410,21 @@ class DatabaseManager {
                 SET valorTotal = ?,
                     saldoPendiente = MAX(0, ? - totalAbonado),
                     estadoPago = CASE
+                        WHEN totalAbonado <= 0 THEN 'Sin pago'
                         WHEN (? - totalAbonado) <= 0 THEN 'Pagado'
-                        WHEN totalAbonado > 0 THEN 'Abonado'
-                        ELSE 'Sin pago'
+                        ELSE 'Abonado'
                     END,
                     fechaModificacion = CURRENT_TIMESTAMP
                 WHERE id = ?
             `)
         };
+    }
+
+    // Regla única de estado de pago: sin abonos siempre es 'Sin pago' (aunque el valor sea 0,
+    // que significa "precio aún no definido"); con abonos, 'Pagado' si cubren el total.
+    calcularEstadoPago(valorTotal, totalAbonado) {
+        if (!(totalAbonado > 0)) return 'Sin pago';
+        return (valorTotal - totalAbonado) <= 0 ? 'Pagado' : 'Abonado';
     }
 
     limpiarMetodoPago(metodoPago) {
@@ -460,9 +486,7 @@ class DatabaseManager {
             const fechaIngreso = normalizarFechaIngresoIso(articulo.fechaIngreso, { fallbackNow: true });
             const totalAbonadoInicial = abonoInicial;
             const saldoPendienteInicial = Math.max(0, valorTotalNum - totalAbonadoInicial);
-            const estadoPagoInicial = saldoPendienteInicial <= 0
-                ? 'Pagado'
-                : (totalAbonadoInicial > 0 ? 'Abonado' : 'Sin pago');
+            const estadoPagoInicial = this.calcularEstadoPago(valorTotalNum, totalAbonadoInicial);
 
             let nuevoId = null;
             const insertarTodo = this.db.transaction(() => {
@@ -625,16 +649,28 @@ class DatabaseManager {
                 return { success: false, error: 'Monto de abono inválido' };
             }
 
-            const articulo = this.statements.obtenerPorId.get(articuloIdNum);
-            if (!articulo) {
-                return { success: false, error: 'Artículo no encontrado' };
-            }
-
             const metodoPagoLimpio = this.limpiarMetodoPago(metodoPago);
             const observacionesLimpias = this.limpiarObservacionesAbono(observaciones);
 
             // Ejecutar todo dentro de una transacción
             const registrar = this.db.transaction(() => {
+                const articulo = this.statements.obtenerPorId.get(articuloIdNum);
+                if (!articulo) {
+                    throw new Error('Artículo no encontrado');
+                }
+                const valorTotal = Number(articulo.valorTotal) || 0;
+                const totalAbonado = Number(articulo.totalAbonado) || 0;
+                const saldo = Math.max(0, valorTotal - totalAbonado);
+                if (valorTotal <= 0) {
+                    throw new Error('Defina el valor total del servicio antes de registrar abonos');
+                }
+                if (saldo <= 0) {
+                    throw new Error('El artículo ya está pagado; no tiene saldo pendiente');
+                }
+                if (montoNum > saldo) {
+                    throw new Error(`El abono ($${montoNum}) supera el saldo pendiente ($${saldo})`);
+                }
+
                 this.statements.insertarAbono.run(articuloIdNum, montoNum, metodoPagoLimpio, observacionesLimpias);
                 const result = this.statements.actualizarTotalesPorAbono.run(
                     montoNum,
@@ -684,6 +720,15 @@ class DatabaseManager {
             }
 
             const actualizarValor = this.db.transaction(() => {
+                const articulo = this.statements.obtenerPorId.get(articuloIdNum);
+                if (!articulo) {
+                    throw new Error('Artículo no encontrado');
+                }
+                const totalAbonado = Number(articulo.totalAbonado) || 0;
+                if (nuevoValorNum < totalAbonado) {
+                    throw new Error(`El nuevo valor no puede ser menor a lo ya abonado ($${totalAbonado})`);
+                }
+
                 const result = this.statements.actualizarValorTotal.run(
                     nuevoValorNum,
                     nuevoValorNum,

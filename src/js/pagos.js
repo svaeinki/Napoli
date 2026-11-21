@@ -4,7 +4,7 @@
 
 async function mostrarModalPago(id) {
     try {
-    const articulo = await window.electronAPI.obtenerPorId(id);
+    const articulo = exigirLecturaIpc(await window.electronAPI.obtenerPorId(id));
     if (!articulo) return;
 
     const modal = document.getElementById('modalPago');
@@ -35,7 +35,7 @@ async function mostrarModalPago(id) {
                 </div>
                 <div class="pago-item">
                     <label>Total Abonado</label>
-                    <div class="valor">${formatearMoneda(articulo.totalAbonado)}</div>
+                    <div class="valor">$${formatearMoneda(articulo.totalAbonado)}</div>
                 </div>
                 <div class="pago-item">
                     <label>Saldo Pendiente</label>
@@ -49,7 +49,7 @@ async function mostrarModalPago(id) {
     `;
 
     // Cargar historial de abonos
-    const abonos = await window.electronAPI.pagoObtenerAbonos(id);
+    const abonos = exigirListaIpc(await window.electronAPI.pagoObtenerAbonos(id));
     const abonosList = document.getElementById('abonosList');
     if (!abonosList) {
         throw new Error('No se encontró el contenedor de historial de abonos');
@@ -123,7 +123,11 @@ async function registrarNuevoAbono() {
         }
 
         const saldoPendiente = Number(modal.dataset.saldoPendiente);
-        if (Number.isFinite(saldoPendiente) && saldoPendiente > 0 && monto > saldoPendiente) {
+        if (Number.isFinite(saldoPendiente) && saldoPendiente <= 0) {
+            mostrarNotificacion('❌ Este artículo no tiene saldo pendiente', true);
+            return;
+        }
+        if (Number.isFinite(saldoPendiente) && monto > saldoPendiente) {
             mostrarNotificacion(`❌ El monto no puede superar el saldo pendiente ($${formatearMoneda(saldoPendiente)})`, true);
             return;
         }

@@ -403,25 +403,41 @@ function obtenerOffsetChileMinutos(fecha) {
 
 function construirFechaChileSegura(anio, mes, dia, hora = 0, minuto = 0, segundo = 0) {
     const localAsUtc = Date.UTC(anio, mes - 1, dia, hora, minuto, segundo);
-    let utcMs = localAsUtc - (obtenerOffsetChileMinutos(new Date(localAsUtc)) * 60000);
-    utcMs = localAsUtc - (obtenerOffsetChileMinutos(new Date(utcMs)) * 60000);
 
-    const fecha = new Date(utcMs);
-    if (!esFechaValida(fecha)) return null;
-
-    const validacion = obtenerPartesEnChile(fecha);
+    // Fecha de calendario inexistente (ej. 31-02): rechazar.
+    const calendario = new Date(localAsUtc);
     if (
-        validacion.year !== anio ||
-        validacion.month !== mes ||
-        validacion.day !== dia ||
-        validacion.hour !== hora ||
-        validacion.minute !== minuto ||
-        validacion.second !== segundo
+        !esFechaValida(calendario) ||
+        calendario.getUTCFullYear() !== anio ||
+        calendario.getUTCMonth() !== mes - 1 ||
+        calendario.getUTCDate() !== dia
     ) {
         return null;
     }
 
-    return fecha;
+    // Probar los offsets vigentes alrededor de la fecha (cubre los cambios de horario).
+    const DIA_MS = 24 * 60 * 60 * 1000;
+    const offsets = new Set([
+        obtenerOffsetChileMinutos(new Date(localAsUtc - DIA_MS)),
+        obtenerOffsetChileMinutos(new Date(localAsUtc)),
+        obtenerOffsetChileMinutos(new Date(localAsUtc + DIA_MS))
+    ]);
+
+    let candidatoMismoDia = null;
+    for (const offset of offsets) {
+        const fecha = new Date(localAsUtc - (offset * 60000));
+        if (!esFechaValida(fecha)) continue;
+        const partes = obtenerPartesEnChile(fecha);
+        if (partes.year !== anio || partes.month !== mes || partes.day !== dia) continue;
+        if (partes.hour === hora && partes.minute === minuto && partes.second === segundo) {
+            return fecha;
+        }
+        if (!candidatoMismoDia) candidatoMismoDia = fecha;
+    }
+
+    // Hora inexistente (el reloj se adelantó, ej. 00:00 del día del cambio):
+    // se usa el instante equivalente del mismo día, en vez de descartar la fecha.
+    return candidatoMismoDia;
 }
 
 function normalizarMeridiem(raw) {
@@ -440,10 +456,11 @@ function parsearFechaIso(texto) {
     return esFechaValida(fecha) ? fecha : null;
 }
 
+// dd-mm-aaaa / dd/mm/aaaa [hh[:mm[:ss]]] [a. m./p. m.]
+const REGEX_FECHA_LOCAL_CHILE = /^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})(?:[,\s]+(\d{1,2})(?::(\d{1,2}))?(?::(\d{1,2}))?)?(?:\s*([AaPp]\.?\s*[Mm]\.?))?$/;
+
 function parsearFechaLocalChile(texto) {
-    const match = texto.match(
-        /^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})(?:[,\s]+(\d{1,2})(?::(\d{1,2}))?(?::(\d{1,2}))?)?(?:\s*([AaPp]\.?\s*[Mm]\.?))?$/
-    );
+    const match = texto.match(REGEX_FECHA_LOCAL_CHILE);
     if (!match) {
         return null;
     }
@@ -495,8 +512,10 @@ function parseFechaIngreso(fechaIngreso) {
     const iso = parsearFechaIso(texto);
     if (iso) return iso;
 
-    const localChile = parsearFechaLocalChile(texto);
-    if (localChile) return localChile;
+    // Si tiene formato dd-mm-aaaa no se delega al parser nativo: este lo leería como mm-dd-aaaa.
+    if (REGEX_FECHA_LOCAL_CHILE.test(texto)) {
+        return parsearFechaLocalChile(texto);
+    }
 
     const fallback = new Date(texto);
     return esFechaValida(fallback) ? fallback : null;
@@ -659,6 +678,38 @@ function setBtnLoading(btn, loading) {
             delete btn.dataset.prevText;
         }
     }
+}
+
+// ============================================
+// RESPUESTAS IPC DE LECTURA
+// ============================================
+
+// Las lecturas IPC devuelven los datos directamente, o { success: false, error } si fallan
+// (p. ej. durante una restauración). Sin esta verificación un error se veía como "sin datos".
+function esRespuestaErrorIpc(resultado) {
+    return Boolean(
+        resultado &&
+        typeof resultado === 'object' &&
+        !Array.isArray(resultado) &&
+        resultado.success === false
+    );
+}
+
+function exigirLecturaIpc(resultado) {
+    if (esRespuestaErrorIpc(resultado)) {
+        const error = new Error(resultado.error || 'Error leyendo datos');
+        if (resultado.code) error.code = resultado.code;
+        throw error;
+    }
+    return resultado;
+}
+
+function exigirListaIpc(resultado) {
+    const datos = exigirLecturaIpc(resultado);
+    if (!Array.isArray(datos)) {
+        throw new Error('Respuesta inesperada de la base de datos');
+    }
+    return datos;
 }
 
 function escaparHtml(texto) {

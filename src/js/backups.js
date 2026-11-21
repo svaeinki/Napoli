@@ -393,7 +393,10 @@ async function verificarDropbox() {
                 if (configSection) configSection.style.display = 'none';
                 if (actionsElement) actionsElement.style.display = 'block';
             } else {
-                statusElement.innerHTML = `<span class="status-disconnected">❌ ${escaparHtml(info.error)}</span>`;
+                const avisoReconexion = info.tokenHeredado
+                    ? '<br><small>La conexión antigua por token ya no es válida: vuelve a conectar con los pasos de abajo.</small>'
+                    : '';
+                statusElement.innerHTML = `<span class="status-disconnected">❌ ${escaparHtml(info.error)}</span>${avisoReconexion}`;
                 if (configSection) configSection.style.display = 'block';
                 if (actionsElement) actionsElement.style.display = 'none';
             }
@@ -418,32 +421,74 @@ async function verificarDropbox() {
     await refrescarChecklistActualizacion();
 }
 
-async function configurarDropbox() {
+async function iniciarAutorizacionDropbox() {
+    const btn = document.querySelector('[onclick="iniciarAutorizacionDropbox()"]');
+    setBtnLoading(btn, true);
     try {
-        const token = document.getElementById('dropboxToken').value.trim();
-
-        if (!token) {
-            mostrarNotificacion('❌ Por favor ingresa el token de Dropbox', true);
+        const appKeyInput = document.getElementById('dropboxAppKey');
+        const appKey = appKeyInput ? appKeyInput.value.trim() : '';
+        if (!appKey) {
+            mostrarNotificacion('❌ Pega el App key de tu app de Dropbox', true);
             return;
         }
 
-        const resultado = await window.electronAPI.dropboxConfigurar(token);
+        const resultado = await window.electronAPI.dropboxIniciarAutorizacion(appKey);
+        if (!resultado || !resultado.success) {
+            mostrarNotificacion('❌ No se pudo iniciar la autorización: ' + (resultado && resultado.error || 'Error desconocido'), true);
+            return;
+        }
 
-        if (resultado.success) {
-            if (resultado.warning) {
-                mostrarNotificacion(`⚠️ ${resultado.warning}`, true);
-            } else {
-                mostrarNotificacion(`✅ Dropbox configurado correctamente. Usuario: ${resultado.usuario}`);
-            }
-            document.getElementById('dropboxToken').value = '';
-            await verificarDropbox();
-            await refrescarChecklistActualizacion();
+        const pasoCodigo = document.getElementById('dropboxPasoCodigo');
+        if (pasoCodigo) pasoCodigo.style.display = 'block';
+        const codigoInput = document.getElementById('dropboxAuthCode');
+        if (codigoInput) {
+            codigoInput.value = '';
+            codigoInput.focus();
+        }
+        if (resultado.abierta === false) {
+            mostrarNotificacion('⚠️ No se pudo abrir el navegador automáticamente', true);
         } else {
-            mostrarNotificacion('❌ Error al configurar Dropbox: ' + resultado.error, true);
+            mostrarNotificacion('🌐 Autoriza en Dropbox y pega el código aquí');
         }
     } catch (error) {
-        console.error('Error configurando Dropbox:', error);
-        mostrarNotificacion('❌ Error inesperado al configurar Dropbox', true);
+        console.error('Error iniciando autorización de Dropbox:', error);
+        mostrarNotificacion('❌ Error inesperado al iniciar la autorización de Dropbox', true);
+    } finally {
+        setBtnLoading(btn, false);
+    }
+}
+
+async function completarAutorizacionDropbox() {
+    const btn = document.querySelector('[onclick="completarAutorizacionDropbox()"]');
+    setBtnLoading(btn, true);
+    try {
+        const codigoInput = document.getElementById('dropboxAuthCode');
+        const codigo = codigoInput ? codigoInput.value.trim() : '';
+        if (!codigo) {
+            mostrarNotificacion('❌ Pega el código que te mostró Dropbox', true);
+            return;
+        }
+
+        const resultado = await window.electronAPI.dropboxCompletarAutorizacion(codigo);
+        if (!resultado || !resultado.success) {
+            mostrarNotificacion('❌ Error al conectar Dropbox: ' + (resultado && resultado.error || 'Error desconocido'), true);
+            return;
+        }
+
+        if (resultado.warning) {
+            mostrarNotificacion(`⚠️ ${resultado.warning}`, true);
+        } else {
+            mostrarNotificacion(`✅ Dropbox conectado. Usuario: ${resultado.usuario}`);
+        }
+        if (codigoInput) codigoInput.value = '';
+        const pasoCodigo = document.getElementById('dropboxPasoCodigo');
+        if (pasoCodigo) pasoCodigo.style.display = 'none';
+        await verificarDropbox();
+    } catch (error) {
+        console.error('Error completando autorización de Dropbox:', error);
+        mostrarNotificacion('❌ Error inesperado al conectar Dropbox', true);
+    } finally {
+        setBtnLoading(btn, false);
     }
 }
 

@@ -10,21 +10,27 @@
     <!-- Configuración (se muestra solo si no está conectado) -->
     <div id="dropboxConfig" style="display: none;">
         <p style="margin-bottom: 10px; color: var(--text-muted);">
-            Para obtener tu token de acceso:
+            Para conectar Dropbox (solo se hace una vez; la conexión se renueva sola):
         </p>
         <ol style="margin-bottom: 15px; color: var(--text-muted); line-height: 1.8;">
-            <li>Ve a <a href="https://www.dropbox.com/developers/apps" target="_blank">Dropbox App Console</a></li>
-            <li>Click en "Create app"</li>
-            <li>Selecciona "Scoped access"</li>
-            <li>Selecciona "Full Dropbox"</li>
-            <li>Dale un nombre: "ReparadoraNapoli"</li>
-            <li>En la pestaña "Permissions", activa: files.content.write, files.content.read</li>
-            <li>En "Settings" → "OAuth 2" → "Generated access token"</li>
-            <li>Copia el token y pégalo aquí:</li>
+            <li>Ve a <a href="https://www.dropbox.com/developers/apps" target="_blank">Dropbox App Console</a> y haz click en "Create app"
+                (si ya tienes la app "ReparadoraNapoli", ábrela y salta al paso 4)</li>
+            <li>Selecciona "Scoped access" y "Full Dropbox". Dale un nombre: "ReparadoraNapoli"</li>
+            <li>En la pestaña "Permissions", activa files.content.write y files.content.read, y pulsa "Submit"</li>
+            <li>En la pestaña "Settings", verifica que en "OAuth 2" → "Allow public clients" diga "Allow", copia el <strong>App key</strong> y pégalo aquí:</li>
         </ol>
         <div class="input-group">
-            <input type="password" id="dropboxToken" placeholder="Pega tu token de Dropbox aquí">
-            <button class="btn btn-primary" onclick="configurarDropbox()">🔗 Conectar</button>
+            <input type="text" id="dropboxAppKey" placeholder="App key de tu app de Dropbox" autocomplete="off" spellcheck="false">
+            <button class="btn btn-primary" onclick="iniciarAutorizacionDropbox()">🌐 Abrir autorización</button>
+        </div>
+        <div id="dropboxPasoCodigo" style="display: none; margin-top: 15px;">
+            <p style="margin-bottom: 10px; color: var(--text-muted);">
+                5. Se abrió Dropbox en el navegador. Pulsa "Permitir", copia el código que aparece y pégalo aquí:
+            </p>
+            <div class="input-group">
+                <input type="password" id="dropboxAuthCode" placeholder="Código de autorización de Dropbox" autocomplete="off">
+                <button class="btn btn-primary" onclick="completarAutorizacionDropbox()">🔗 Conectar</button>
+            </div>
         </div>
     </div>
 

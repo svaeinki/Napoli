@@ -288,8 +288,8 @@ async function actualizarInventario(options = {}) {
     inventarioDirty = false;
     inventarioRefreshInFlight = (async () => {
         try {
-            const todosArticulos = await window.electronAPI.obtenerTodos();
-            inventarioCache = Array.isArray(todosArticulos) ? todosArticulos : [];
+            // Si la lectura falla se conserva el inventario anterior y se muestra el error.
+            inventarioCache = exigirListaIpc(await window.electronAPI.obtenerTodos());
             inventarioCacheCargado = true;
 
             const visibleDespuesFetch = inventarioEstaVisible();
@@ -346,8 +346,7 @@ async function aplicarFiltro(options = {}) {
 
     try {
         if (!useCache || !inventarioCacheCargado) {
-            const todosArticulos = await window.electronAPI.obtenerTodos();
-            inventarioCache = Array.isArray(todosArticulos) ? todosArticulos : [];
+            inventarioCache = exigirListaIpc(await window.electronAPI.obtenerTodos());
             inventarioCacheCargado = true;
         }
 
@@ -476,7 +475,7 @@ async function exportarDatos() {
     const btn = document.querySelector('[onclick="exportarDatos()"]');
     setBtnLoading(btn, true);
     try {
-        const articulos = await window.electronAPI.obtenerTodos();
+        const articulos = exigirListaIpc(await window.electronAPI.obtenerTodos());
 
         if (articulos.length === 0) {
             mostrarNotificacion('No hay datos para exportar', true);
@@ -497,7 +496,8 @@ async function exportarDatos() {
             csv += `${art.id},"${escaparCsv(art.rut)}","${escaparCsv(art.nombreCliente)}","${escaparCsv(art.telefono)}","${escaparCsv(art.tipoArticulo)}","${escaparCsv(art.descripcion)}","${escaparCsv(art.numeroBodega)}","${escaparCsv(fechaIngresoExport)}","${escaparCsv(art.estado)}","${escaparCsv(fechaEntregaExport)}","${escaparCsv(art.observaciones)}",${art.valorTotal},${art.totalAbonado},${art.saldoPendiente},"${escaparCsv(art.estadoPago)}"\n`;
         });
 
-        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        // BOM UTF-8: sin él, Excel en Windows interpreta el CSV como ANSI y rompe los acentos.
+        const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement('a');
         const url = URL.createObjectURL(blob);
 

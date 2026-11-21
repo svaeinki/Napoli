@@ -55,7 +55,7 @@ async function buscarArticulos() {
             return;
         }
 
-        const resultados = await window.electronAPI.buscar(termino);
+        const resultados = exigirListaIpc(await window.electronAPI.buscar(termino));
 
         actualizarContadorResultados(resultados.length);
 

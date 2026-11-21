@@ -89,7 +89,7 @@ async function ingresarArticulo(e) {
         // Obtener artículo completo con abonos actualizados
         let articuloCompleto = null;
         try {
-            articuloCompleto = await window.electronAPI.obtenerPorId(articuloId);
+            articuloCompleto = exigirLecturaIpc(await window.electronAPI.obtenerPorId(articuloId));
         } catch (errorDetalle) {
             console.error('No se pudo recargar artículo recién insertado, se usará snapshot local:', errorDetalle);
         }
@@ -147,7 +147,7 @@ function desbloquearFormulariosDespuesDeAccion() {
 
 async function marcarEntregado(id) {
     try {
-        const articulo = await window.electronAPI.obtenerPorId(id);
+        const articulo = exigirLecturaIpc(await window.electronAPI.obtenerPorId(id));
         const confirmado = articulo
             ? await confirmarAccionAsync({
                 titulo: 'Confirmar entrega',
@@ -208,7 +208,7 @@ async function marcarEnBodega(id) {
 
 async function eliminarArticulo(id) {
     try {
-        const articulo = await window.electronAPI.obtenerPorId(id);
+        const articulo = exigirLecturaIpc(await window.electronAPI.obtenerPorId(id));
         const confirmado = articulo
             ? await confirmarAccionAsync({
                 titulo: 'Confirmar eliminación',
@@ -270,7 +270,7 @@ async function generarTicket(articulo) {
 
 async function verTicket(id) {
     try {
-        const articulo = await window.electronAPI.obtenerPorId(id);
+        const articulo = exigirLecturaIpc(await window.electronAPI.obtenerPorId(id));
         if (!articulo) return;
 
         const ticketHtml = await window.Tickets.generarHTML(articulo);
@@ -299,7 +299,7 @@ async function verTicket(id) {
 
 async function reimprimirTicket(id) {
     try {
-        const articulo = await window.electronAPI.obtenerPorId(id);
+        const articulo = exigirLecturaIpc(await window.electronAPI.obtenerPorId(id));
         if (articulo) {
             const ticketGenerado = await generarTicket(articulo);
             if (ticketGenerado) {

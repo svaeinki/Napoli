@@ -3,6 +3,7 @@ const { Worker } = require('worker_threads');
 const DatabaseManager = require('./database');
 
 const DEFAULT_TIMEOUT_MS = 15000;
+const DEFAULT_WORKER_STARTUP_TIMEOUT_MS = 10000;
 const DB_OP_UNCERTAIN_CODE = 'DB_OP_UNCERTAIN';
 const MUTATING_OPS = new Set([
     'insertar',
@@ -30,8 +31,11 @@ const ALLOWED_DB_OPS = new Set([
 ]);
 
 class DBService {
-    constructor({ dbPath, diagnostics } = {}) {
+    constructor({ dbPath, diagnostics, workerStartupTimeoutMs } = {}) {
         this.dbPath = dbPath;
+        this.workerStartupTimeoutMs = Number(workerStartupTimeoutMs) > 0
+            ? Number(workerStartupTimeoutMs)
+            : DEFAULT_WORKER_STARTUP_TIMEOUT_MS;
         this.diagnostics = diagnostics || null;
         this.mode = 'worker';
         this.warning = null;
@@ -179,17 +183,8 @@ class DBService {
             });
             this.attachWorkerListeners(worker);
 
-            const startupTimeout = setTimeout(() => {
-                reject(new Error('Timeout inicializando worker DB'));
-                try {
-                    this.expectedWorkerExit = true;
-                    worker.terminate();
-                } catch (error) {
-                    // noop
-                }
-            }, 10000);
-
             let settled = false;
+            let startupTimeout = null;
             const cleanupStartupListeners = () => {
                 worker.off('message', onMessage);
                 worker.off('error', onError);
@@ -226,6 +221,20 @@ class DBService {
                     settle(() => reject(new Error(`Worker DB finalizó antes de iniciar (code ${code})`)));
                 }
             };
+
+            // El timeout pasa por settle(): así un 'ready' tardío ya no puede marcar
+            // como activo un worker que se está terminando.
+            startupTimeout = setTimeout(() => {
+                settle(() => {
+                    this.expectedWorkerExit = true;
+                    Promise.resolve()
+                        .then(() => worker.terminate())
+                        .catch(() => {
+                            // noop
+                        });
+                    reject(new Error('Timeout inicializando worker DB'));
+                });
+            }, this.workerStartupTimeoutMs);
 
             worker.on('message', onMessage);
             worker.on('error', onError);

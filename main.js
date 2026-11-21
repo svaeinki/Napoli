@@ -4,6 +4,7 @@ const fs = require('fs');
 const BetterSqlite = require('better-sqlite3');
 const DBService = require('./src/db-service');
 const DropboxManager = require('./src/dropbox');
+const { iniciarAutorizacionPKCE, completarAutorizacionPKCE } = DropboxManager;
 const { DiagnosticsLogger } = require('./src/diagnostics');
 const { formatearFechaChileParaExport } = require('./src/chile-date');
 const { esUrlExternaPermitida, esFileUrl } = require('./src/navigation-security');
@@ -109,7 +110,7 @@ function cargarEstadoBackups({ strict = false } = {}) {
 
 function guardarEstadoBackups(estado) {
     try {
-        fs.writeFileSync(BACKUP_STATUS_PATH, JSON.stringify(estado, null, 2));
+        escribirJsonAtomico(BACKUP_STATUS_PATH, estado);
     } catch (error) {
         console.error('Error guardando estado de backups:', error);
     }
@@ -317,6 +318,9 @@ async function restaurarBackupDB(rutaBackup) {
     let rollbackUsed = false;
     let warning = null;
     let restoredPath = null;
+    let snapshotCompleto = false;
+    let dbCerrada = false;
+    let dbReemplazada = false;
 
     try {
         const validacion = validarBackupDBInterno(rutaBackup);
@@ -350,14 +354,20 @@ async function restaurarBackupDB(rutaBackup) {
             dbService.crearBackup(snapshotPath)
         );
         if (!snapshotResult.success) {
+            // El snapshot pudo quedar a medias: se descarta para que nunca se use como rollback.
+            eliminarArchivoParcial(snapshotPath);
             throw new Error(`No se pudo crear snapshot previo: ${snapshotResult.error}`);
         }
+        snapshotCompleto = true;
 
+        // Se marca antes de esperar: si el cierre falla a medias, igual se intentará reabrir.
+        dbCerrada = true;
         await dbService.closeForRestore();
 
         limpiarSidecarsSQLite(DB_PATH);
         const stagedRestorePath = stageRestoreFile(restoredPath, DB_PATH);
         replaceFileAtomically(stagedRestorePath, DB_PATH);
+        dbReemplazada = true;
         limpiarSidecarsSQLite(DB_PATH);
 
         await dbService.reopenAfterRestore();
@@ -382,35 +392,41 @@ async function restaurarBackupDB(rutaBackup) {
 
         return { success: true, restoredPath, rollbackUsed: false, warning: null };
     } catch (error) {
-        try {
-            if (dbService) {
-                await dbService.closeForRestore();
-            }
-        } catch (closeError) {
-            console.error('Error cerrando DB tras fallo de restore:', closeError);
-        }
-
-        if (fs.existsSync(snapshotPath)) {
+        // Solo hay que deshacer algo si la base activa llegó a reemplazarse.
+        // Si el fallo ocurrió antes (p. ej. al crear el snapshot), la base sigue intacta.
+        if (dbReemplazada) {
             try {
-                limpiarSidecarsSQLite(DB_PATH);
-                const stagedSnapshotPath = stageRestoreFile(snapshotPath, DB_PATH);
-                replaceFileAtomically(stagedSnapshotPath, DB_PATH);
-                limpiarSidecarsSQLite(DB_PATH);
-                rollbackUsed = true;
-            } catch (rollbackError) {
-                warning = `No se pudo restaurar snapshot automático: ${rollbackError.message}`;
+                if (dbService) {
+                    await dbService.closeForRestore();
+                }
+            } catch (closeError) {
+                console.error('Error cerrando DB tras fallo de restore:', closeError);
             }
-        } else {
-            warning = 'No se encontró snapshot para rollback automático';
+
+            if (snapshotCompleto && fs.existsSync(snapshotPath)) {
+                try {
+                    limpiarSidecarsSQLite(DB_PATH);
+                    const stagedSnapshotPath = stageRestoreFile(snapshotPath, DB_PATH);
+                    replaceFileAtomically(stagedSnapshotPath, DB_PATH);
+                    limpiarSidecarsSQLite(DB_PATH);
+                    rollbackUsed = true;
+                } catch (rollbackError) {
+                    warning = `No se pudo restaurar snapshot automático: ${rollbackError.message}`;
+                }
+            } else {
+                warning = 'No se encontró snapshot para rollback automático';
+            }
         }
 
-        try {
-            if (dbService) {
-                await dbService.reopenAfterRestore();
+        if (dbCerrada || dbReemplazada) {
+            try {
+                if (dbService) {
+                    await dbService.reopenAfterRestore();
+                }
+            } catch (reopenError) {
+                const reopenMessage = `No se pudo reabrir la base tras el fallo: ${reopenError.message}`;
+                warning = warning ? `${warning} | ${reopenMessage}` : reopenMessage;
             }
-        } catch (reopenError) {
-            const reopenMessage = `No se pudo reabrir la base tras el fallo: ${reopenError.message}`;
-            warning = warning ? `${warning} | ${reopenMessage}` : reopenMessage;
         }
 
         registrarEstadoBackups({
@@ -438,6 +454,16 @@ async function restaurarBackupDB(rutaBackup) {
     }
     })();
     return await restauracionPromesa;
+}
+
+function eliminarArchivoParcial(rutaArchivo) {
+    try {
+        if (fs.existsSync(rutaArchivo)) {
+            fs.unlinkSync(rutaArchivo);
+        }
+    } catch (error) {
+        console.error(`No se pudo eliminar archivo parcial ${rutaArchivo}:`, error);
+    }
 }
 
 function obtenerEstadoBackups() {
@@ -529,105 +555,158 @@ function registrarDecisionOperativa(decision, configExistente = null) {
     }
 }
 
-// Cargar configuración (incluye token de Dropbox)
-function cargarConfiguracion() {
-    try {
-        if (fs.existsSync(CONFIG_PATH)) {
-            const config = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
-            let configModificada = false;
-
-            if (!config || typeof config !== 'object') {
-                const configPorDefecto = {
-                    printer: { ...PRINTER_CONFIG_DEFAULTS },
-                    operationalDecisions: []
-                };
-                guardarConfiguracion(configPorDefecto);
-                return configPorDefecto;
-            }
-
-            if (!config.printer || typeof config.printer !== 'object') {
-                config.printer = {};
-                configModificada = true;
-            }
-
-            // Migración v1: verticalShift58mm era inefectivo (Electron margin anulado por @page CSS).
-            // Ahora funciona via CSS var — bumpeamos valores bajos a un default seguro.
-            if (
-                config.printer &&
-                !config._migrated_verticalShift_v1 &&
-                typeof config.printer.verticalShift58mm === 'number' &&
-                config.printer.verticalShift58mm < 8
-            ) {
-                config.printer.verticalShift58mm = 10;
-                config._migrated_verticalShift_v1 = true;
-                configModificada = true;
-            }
-            // Migración v2: offset ahora es inline style directo (eliminado doble mecanismo Electron margin).
-            // Default bumpeado a 15 mm para cubrir impresoras con mayor distancia cabezal→sierra.
-            if (
-                config.printer &&
-                !config._migrated_verticalShift_v2 &&
-                typeof config.printer.verticalShift58mm === 'number' &&
-                config.printer.verticalShift58mm < 12
-            ) {
-                config.printer.verticalShift58mm = 15;
-                config._migrated_verticalShift_v2 = true;
-                configModificada = true;
-            }
-            // Migración v3: endurece mínimo operativo del offset para evitar recorte superior.
-            if (
-                config.printer &&
-                !config._migrated_verticalShift_v3 &&
-                Number.isFinite(Number(config.printer.verticalShift58mm)) &&
-                Number(config.printer.verticalShift58mm) < 8
-            ) {
-                config.printer.verticalShift58mm = 15;
-                config._migrated_verticalShift_v3 = true;
-                configModificada = true;
-            }
-
-            const printerNormalizado = sanitizarConfigImpresora(config.printer || {});
-            const printerCompleto = { ...PRINTER_CONFIG_DEFAULTS, ...printerNormalizado };
-            const printerAnterior = JSON.stringify(config.printer);
-            const printerNuevo = JSON.stringify(printerCompleto);
-            if (printerAnterior !== printerNuevo) {
-                config.printer = printerCompleto;
-                configModificada = true;
-            }
-
-            const decisionesNormalizadas = normalizarListaDecisionesOperativas(config.operationalDecisions);
-            if (JSON.stringify(config.operationalDecisions || []) !== JSON.stringify(decisionesNormalizadas)) {
-                config.operationalDecisions = decisionesNormalizadas;
-                configModificada = true;
-            }
-
-            if (configModificada) {
-                try {
-                    guardarConfiguracion(config);
-                } catch (saveError) {
-                    console.error('Error persistiendo configuración migrada:', saveError);
-                }
-            }
-            return config;
-        }
-    } catch (error) {
-        console.error('Error cargando configuración:', error);
-    }
-    const configInicial = {
+function crearConfiguracionPorDefecto() {
+    return {
         printer: { ...PRINTER_CONFIG_DEFAULTS },
         operationalDecisions: []
     };
+}
+
+// Guarda una copia del config.json ilegible en vez de perderlo (contiene el token de Dropbox).
+function preservarConfiguracionCorrupta() {
+    const destino = path.join(USER_DATA_PATH, `config.corrupt-${timestampIsoSeguro()}.json`);
     try {
-        guardarConfiguracion(configInicial);
+        fs.copyFileSync(CONFIG_PATH, destino);
+        console.error(`config.json ilegible; se conservó una copia en ${destino}`);
+        return true;
+    } catch (error) {
+        console.error('No se pudo conservar copia del config.json ilegible:', error);
+        return false;
+    }
+}
+
+function guardarConfiguracionInicial(config) {
+    try {
+        guardarConfiguracion(config);
     } catch (saveError) {
         console.error('Error guardando configuración inicial:', saveError);
     }
-    return configInicial;
+    return config;
+}
+
+// Cargar configuración (incluye token de Dropbox)
+function cargarConfiguracion() {
+    let raw = null;
+    try {
+        if (fs.existsSync(CONFIG_PATH)) {
+            raw = fs.readFileSync(CONFIG_PATH, 'utf8');
+        }
+    } catch (error) {
+        // No se pudo leer (permisos, archivo bloqueado...): no sobrescribir lo que haya en disco.
+        console.error('Error leyendo configuración:', error);
+        return crearConfiguracionPorDefecto();
+    }
+
+    if (raw === null) {
+        return guardarConfiguracionInicial(crearConfiguracionPorDefecto());
+    }
+
+    let config = null;
+    try {
+        config = JSON.parse(raw);
+    } catch (error) {
+        console.error('Error parseando configuración:', error);
+    }
+    if (!config || typeof config !== 'object' || Array.isArray(config)) {
+        // Solo se reemplaza el archivo si antes se pudo conservar una copia.
+        if (!preservarConfiguracionCorrupta()) {
+            return crearConfiguracionPorDefecto();
+        }
+        return guardarConfiguracionInicial(crearConfiguracionPorDefecto());
+    }
+
+    try {
+        let configModificada = false;
+
+        if (!config.printer || typeof config.printer !== 'object') {
+            config.printer = {};
+            configModificada = true;
+        }
+
+        // Migración v1: verticalShift58mm era inefectivo (Electron margin anulado por @page CSS).
+        // Ahora funciona via CSS var — bumpeamos valores bajos a un default seguro.
+        if (
+            config.printer &&
+            !config._migrated_verticalShift_v1 &&
+            typeof config.printer.verticalShift58mm === 'number' &&
+            config.printer.verticalShift58mm < 8
+        ) {
+            config.printer.verticalShift58mm = 10;
+            config._migrated_verticalShift_v1 = true;
+            configModificada = true;
+        }
+        // Migración v2: offset ahora es inline style directo (eliminado doble mecanismo Electron margin).
+        // Default bumpeado a 15 mm para cubrir impresoras con mayor distancia cabezal→sierra.
+        if (
+            config.printer &&
+            !config._migrated_verticalShift_v2 &&
+            typeof config.printer.verticalShift58mm === 'number' &&
+            config.printer.verticalShift58mm < 12
+        ) {
+            config.printer.verticalShift58mm = 15;
+            config._migrated_verticalShift_v2 = true;
+            configModificada = true;
+        }
+        // Migración v3: endurece mínimo operativo del offset para evitar recorte superior.
+        if (
+            config.printer &&
+            !config._migrated_verticalShift_v3 &&
+            Number.isFinite(Number(config.printer.verticalShift58mm)) &&
+            Number(config.printer.verticalShift58mm) < 8
+        ) {
+            config.printer.verticalShift58mm = 15;
+            config._migrated_verticalShift_v3 = true;
+            configModificada = true;
+        }
+
+        const printerNormalizado = sanitizarConfigImpresora(config.printer || {});
+        const printerCompleto = { ...PRINTER_CONFIG_DEFAULTS, ...printerNormalizado };
+        const printerAnterior = JSON.stringify(config.printer);
+        const printerNuevo = JSON.stringify(printerCompleto);
+        if (printerAnterior !== printerNuevo) {
+            config.printer = printerCompleto;
+            configModificada = true;
+        }
+
+        const decisionesNormalizadas = normalizarListaDecisionesOperativas(config.operationalDecisions);
+        if (JSON.stringify(config.operationalDecisions || []) !== JSON.stringify(decisionesNormalizadas)) {
+            config.operationalDecisions = decisionesNormalizadas;
+            configModificada = true;
+        }
+
+        if (configModificada) {
+            try {
+                guardarConfiguracion(config);
+            } catch (saveError) {
+                console.error('Error persistiendo configuración migrada:', saveError);
+            }
+        }
+        return config;
+    } catch (error) {
+        console.error('Error normalizando configuración:', error);
+        return config;
+    }
+}
+
+function escribirJsonAtomico(ruta, datos) {
+    // Escribir a un temporal y renombrar: un corte a mitad de escritura no deja el archivo corrupto.
+    const temporal = `${ruta}.${process.pid}.tmp`;
+    fs.writeFileSync(temporal, JSON.stringify(datos, null, 2));
+    try {
+        fs.renameSync(temporal, ruta);
+    } catch (error) {
+        try {
+            fs.unlinkSync(temporal);
+        } catch (_) {
+            // noop: conservar error original.
+        }
+        throw error;
+    }
 }
 
 // Guardar configuración
 function guardarConfiguracion(config) {
-    fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2));
+    escribirJsonAtomico(CONFIG_PATH, config);
 }
 
 function abrirUrlExternaPermitida(url) {
@@ -923,7 +1002,19 @@ app.whenReady().then(async () => {
 
     // Inicializar Dropbox si está configurado
     const config = cargarConfiguracion();
-    if (config.dropboxToken) {
+    const credencialesOAuth = leerCredencialesDropboxOAuth(config);
+    if (credencialesOAuth) {
+        if (!safeStorage.isEncryptionAvailable()) {
+            console.error(`Token Dropbox: ${WARNING_TOKEN_NO_CIFRADO}`);
+            registrarDecisionOperativa({
+                code: OP_DECISION_DROPBOX_TOKEN_SIN_CIFRADO,
+                context: 'dropbox:auto_init',
+                note: 'Refresh token de Dropbox cargado en equipo sin cifrado local disponible.'
+            }, config);
+        }
+        dropboxManager = new DropboxManager(credencialesOAuth);
+    } else if (config.dropboxToken) {
+        // Token antiguo (pegado desde la App Console): sigue funcionando hasta que expire.
         const token = descifrarToken(config.dropboxToken);
         if (token) {
             if (!safeStorage.isEncryptionAvailable()) {
@@ -1260,18 +1351,7 @@ async function crearBackupInterno({ prefijo = 'napoli_backup_', opLabel = 'backu
             return backupDB;
         }
 
-        // Subir a Dropbox si está configurado
-        if (dropboxManager && dropboxManager.estaConfigurado()) {
-            const subida = await subirBackupDBConTimeout(backupPath);
-            if (!subida.success) {
-                const mensaje = `Backup local creado, pero falló subida a Dropbox: ${subida.error}`;
-                if (exigirDropbox) {
-                    return { success: false, error: mensaje };
-                }
-                return { success: true, path: backupPath, warning: mensaje };
-            }
-        }
-
+        // El backup local ya existe: limpiar y registrarlo pase lo que pase con Dropbox.
         if (limpiar) {
             limpiarBackupsAntiguos();
         }
@@ -1282,6 +1362,34 @@ async function crearBackupInterno({ prefijo = 'napoli_backup_', opLabel = 'backu
                 path: backupPath
             }
         });
+
+        // Subir a Dropbox si está configurado
+        if (dropboxManager && dropboxManager.estaConfigurado()) {
+            let subida;
+            try {
+                subida = await subirBackupDBConTimeout(backupPath);
+            } catch (uploadError) {
+                // Timeout u otro error lanzado: no debe convertir en fallo un backup local exitoso.
+                subida = { success: false, error: uploadError.message };
+            }
+
+            registrarEstadoBackups({
+                lastDropboxUpload: {
+                    timestamp: new Date().toISOString(),
+                    path: backupPath,
+                    success: Boolean(subida && subida.success),
+                    error: subida && !subida.success ? (subida.error || 'Error desconocido') : null
+                }
+            });
+
+            if (!subida || !subida.success) {
+                const mensaje = `Backup local creado, pero falló subida a Dropbox: ${(subida && subida.error) || 'Error desconocido'}`;
+                if (exigirDropbox) {
+                    return { success: false, path: backupPath, error: mensaje };
+                }
+                return { success: true, path: backupPath, warning: mensaje };
+            }
+        }
 
         return { success: true, path: backupPath };
     } catch (error) {
@@ -1532,47 +1640,82 @@ function limpiarBackupsAntiguos() {
 // HANDLERS IPC - DROPBOX
 // ============================================
 
-ipcMain.handle('dropbox:configurar', async (_event, token) => {
+const APP_KEY_DROPBOX_REGEX = /^[a-z0-9]{8,32}$/i;
+let autorizacionDropboxPendiente = null;
+
+function leerCredencialesDropboxOAuth(config) {
+    const auth = config && config.dropboxAuth;
+    if (!auth || typeof auth !== 'object') return null;
+    const appKey = typeof auth.appKey === 'string' ? auth.appKey.trim() : '';
+    const refreshToken = descifrarToken(auth.refreshToken);
+    if (!appKey || !refreshToken) return null;
+    return { appKey, refreshToken };
+}
+
+// Paso 1: genera la URL de autorización (PKCE) y la abre en el navegador.
+ipcMain.handle('dropbox:iniciarAutorizacion', async (_event, appKey) => {
     try {
-        const tokenLimpio = typeof token === 'string' ? token.trim() : '';
-        if (!tokenLimpio) {
-            return { success: false, error: 'Token de Dropbox inválido' };
+        const appKeyLimpia = typeof appKey === 'string' ? appKey.trim() : '';
+        if (!APP_KEY_DROPBOX_REGEX.test(appKeyLimpia)) {
+            return { success: false, error: 'App key de Dropbox inválida (cópiela desde Settings de su app en la App Console)' };
         }
 
-        dropboxManager = new DropboxManager(tokenLimpio);
-        const verificacion = await dropboxManager.verificarConexion();
+        autorizacionDropboxPendiente = await iniciarAutorizacionPKCE(appKeyLimpia);
+        const abierta = abrirUrlExternaPermitida(autorizacionDropboxPendiente.url);
+        return { success: true, url: autorizacionDropboxPendiente.url, abierta };
+    } catch (error) {
+        autorizacionDropboxPendiente = null;
+        return payloadErrorOperacion(error);
+    }
+});
 
-        if (verificacion.success) {
-            const config = cargarConfiguracion();
-            config.dropboxToken = cifrarToken(tokenLimpio);
-            guardarConfiguracion(config);
-            const warning = safeStorage.isEncryptionAvailable() ? null : WARNING_TOKEN_NO_CIFRADO;
-            if (warning) {
-                registrarDecisionOperativa({
-                    code: OP_DECISION_DROPBOX_TOKEN_SIN_CIFRADO,
-                    context: 'dropbox:configurar',
-                    note: 'Token Dropbox configurado sin cifrado local por limitación del sistema.'
-                }, config);
-            }
+// Paso 2: canjea el código que muestra Dropbox por un refresh token y lo guarda cifrado.
+ipcMain.handle('dropbox:completarAutorizacion', async (_event, codigo) => {
+    try {
+        const codigoLimpio = typeof codigo === 'string' ? codigo.trim() : '';
+        if (!codigoLimpio || codigoLimpio.length > 512) {
+            return { success: false, error: 'Código de autorización inválido' };
+        }
 
-            const response = {
-                success: true,
-                usuario: verificacion.usuario,
-                warning,
-                insecureStorage: Boolean(warning)
-            };
-            if (warning) {
-                response.code = INSECURE_STORAGE_RESPONSE_CODE;
-            }
-
-            return response;
-        } else {
-            dropboxManager = null;
+        const credenciales = await completarAutorizacionPKCE(autorizacionDropboxPendiente, codigoLimpio);
+        const candidato = new DropboxManager(credenciales);
+        const verificacion = await candidato.verificarConexion();
+        if (!verificacion.success) {
             return { success: false, error: verificacion.error };
         }
+
+        autorizacionDropboxPendiente = null;
+        dropboxManager = candidato;
+
+        const config = cargarConfiguracion();
+        config.dropboxAuth = {
+            appKey: credenciales.appKey,
+            refreshToken: cifrarToken(credenciales.refreshToken)
+        };
+        delete config.dropboxToken;
+        guardarConfiguracion(config);
+
+        const warning = safeStorage.isEncryptionAvailable() ? null : WARNING_TOKEN_NO_CIFRADO;
+        if (warning) {
+            registrarDecisionOperativa({
+                code: OP_DECISION_DROPBOX_TOKEN_SIN_CIFRADO,
+                context: 'dropbox:completarAutorizacion',
+                note: 'Refresh token de Dropbox guardado sin cifrado local por limitación del sistema.'
+            }, config);
+        }
+
+        const response = {
+            success: true,
+            usuario: verificacion.usuario,
+            warning,
+            insecureStorage: Boolean(warning)
+        };
+        if (warning) {
+            response.code = INSECURE_STORAGE_RESPONSE_CODE;
+        }
+        return response;
     } catch (error) {
-        dropboxManager = null;
-        return { success: false, error: error.message };
+        return payloadErrorOperacion(error);
     }
 });
 
@@ -1581,7 +1724,9 @@ ipcMain.handle('dropbox:verificar', async () => {
         return { success: false, error: 'Dropbox no configurado' };
     }
     try {
-        return await dropboxManager.verificarConexion();
+        const resultado = await dropboxManager.verificarConexion();
+        // El token antiguo deja de funcionar al expirar: avisar que hay que reconectar con el flujo nuevo.
+        return { ...resultado, tokenHeredado: Boolean(dropboxManager.usaTokenHeredado) };
     } catch (error) {
         return payloadErrorOperacion(error);
     }
@@ -1594,8 +1739,10 @@ ipcMain.handle('dropbox:estaConfigurado', async () => {
 ipcMain.handle('dropbox:desconectar', async () => {
     try {
         dropboxManager = null;
+        autorizacionDropboxPendiente = null;
         const config = cargarConfiguracion();
         delete config.dropboxToken;
+        delete config.dropboxAuth;
         guardarConfiguracion(config);
         return { success: true };
     } catch (error) {

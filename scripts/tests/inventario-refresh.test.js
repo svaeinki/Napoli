@@ -9,11 +9,28 @@ const inventarioScript = fs.readFileSync(
     'utf8'
 );
 
+// Helpers reales de utils.js para validar respuestas IPC de lectura.
+function cargarHelpersIpc() {
+    const utilsContext = { AbortController, console, document: {}, window: {} };
+    vm.createContext(utilsContext);
+    vm.runInContext(
+        fs.readFileSync(path.join(__dirname, '../../src/js/utils.js'), 'utf8'),
+        utilsContext,
+        { filename: 'utils.js' }
+    );
+    return {
+        esRespuestaErrorIpc: utilsContext.esRespuestaErrorIpc,
+        exigirLecturaIpc: utilsContext.exigirLecturaIpc,
+        exigirListaIpc: utilsContext.exigirListaIpc
+    };
+}
+
 function crearContextoInventario({ articulos, inventarioActivo }) {
     let obtenerTodosCalls = 0;
     let tablaRenderCount = 0;
     let obtenerDiasCalls = 0;
     let estaActivo = inventarioActivo;
+    const notificaciones = [];
     const filasTablaPorId = new Map();
 
     function crearFilaTablaFake(id, estado = 'En Bodega') {
@@ -76,7 +93,7 @@ function crearContextoInventario({ articulos, inventarioActivo }) {
             electronAPI: {
                 obtenerTodos: async () => {
                     obtenerTodosCalls += 1;
-                    return articulos;
+                    return typeof articulos === 'function' ? articulos() : articulos;
                 }
             }
         },
@@ -85,7 +102,10 @@ function crearContextoInventario({ articulos, inventarioActivo }) {
             querySelector: () => null,
             createElement: () => ({ className: '', textContent: '' })
         },
-        mostrarNotificacion: () => {},
+        mostrarNotificacion: (mensaje, esError = false) => {
+            notificaciones.push({ mensaje, esError });
+        },
+        ...cargarHelpersIpc(),
         obtenerDiasEnBodega: () => {
             obtenerDiasCalls += 1;
             return 0;
@@ -124,6 +144,7 @@ function crearContextoInventario({ articulos, inventarioActivo }) {
         getObtenerTodosCalls: () => obtenerTodosCalls,
         getTablaRenderCount: () => tablaRenderCount,
         getObtenerDiasCalls: () => obtenerDiasCalls,
+        getNotificaciones: () => notificaciones,
         getElemento: (id) => elements[id]
     };
 
@@ -272,4 +293,31 @@ test('eliminarFilaInventarioLocal remueve fila local sin releer inventario', asy
     assert.equal(resultado, true);
     assert.equal(context.__helpers.getObtenerTodosCalls(), lecturasAntes);
     assert.equal(context.__helpers.obtenerFilaTabla(11), null);
+});
+
+test('si la lectura falla (p. ej. restauración en curso) se avisa el error y se conserva el inventario', async () => {
+    let respuesta = [
+        { id: 1, estado: 'En Bodega' },
+        { id: 2, estado: 'Entregado' }
+    ];
+    const context = crearContextoInventario({
+        inventarioActivo: true,
+        articulos: () => respuesta
+    });
+
+    await context.actualizarInventario({ deferIfHidden: false });
+    assert.equal(context.__helpers.getElemento('totalArticulos').textContent, 2);
+    const rendersAntes = context.__helpers.getTablaRenderCount();
+
+    respuesta = { success: false, error: 'Restauración en curso. Intente nuevamente al terminar.', code: 'RESTORE_BUSY' };
+    const resultado = await context.actualizarInventario({ force: true, deferIfHidden: false });
+
+    assert.equal(resultado.success, false);
+    assert.match(resultado.error, /Restauración en curso/);
+    const errores = context.__helpers.getNotificaciones().filter((n) => n.esError);
+    assert.equal(errores.length, 1);
+    assert.match(errores[0].mensaje, /Restauración en curso/);
+    // No se renderiza una tabla vacía ni se ponen los contadores en cero.
+    assert.equal(context.__helpers.getTablaRenderCount(), rendersAntes);
+    assert.equal(context.__helpers.getElemento('totalArticulos').textContent, 2);
 });

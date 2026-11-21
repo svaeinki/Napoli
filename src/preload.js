@@ -29,7 +29,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     backupObtenerEstado: () => ipcRenderer.invoke('backup:estado'),
 
     // Dropbox
-    dropboxConfigurar: (token) => ipcRenderer.invoke('dropbox:configurar', token),
+    dropboxIniciarAutorizacion: (appKey) => ipcRenderer.invoke('dropbox:iniciarAutorizacion', appKey),
+    dropboxCompletarAutorizacion: (codigo) => ipcRenderer.invoke('dropbox:completarAutorizacion', codigo),
     dropboxVerificar: () => ipcRenderer.invoke('dropbox:verificar'),
     dropboxEstaConfigurado: () => ipcRenderer.invoke('dropbox:estaConfigurado'),
     dropboxDesconectar: () => ipcRenderer.invoke('dropbox:desconectar'),

@@ -182,9 +182,12 @@ yarn test
 
 La integración con Dropbox es **completamente opcional** y se configura desde dentro de la aplicación:
 
-1. Abre la app y ve al panel de configuración (icono de engranaje ⚙️).
-2. Ingresa tu token de acceso a Dropbox.
-3. La app guarda el token **cifrado** en el directorio de datos del usuario.
+1. Abre la app y ve a la pestaña **Backups**.
+2. Crea una app en la [Dropbox App Console](https://www.dropbox.com/developers/apps) (Scoped access, Full Dropbox, permisos `files.content.write` y `files.content.read`) y pega su **App key**.
+3. Pulsa **Abrir autorización**: Dropbox se abre en el navegador, autoriza y pega el código que te muestra.
+4. La app guarda un *refresh token* **cifrado** en el directorio de datos del usuario y renueva el acceso sola (OAuth 2 con PKCE, sin *client secret*).
+
+Los tokens que entrega la App Console ("Generated access token") expiran a las ~4 horas; por eso ya no se usan. Si una instalación antigua tiene uno guardado, sigue funcionando hasta que expire y la app pide reconectar.
 
 Comportamiento de seguridad:
 - Si `safeStorage` está disponible, el token se guarda cifrado.
@@ -446,7 +449,7 @@ Toda la comunicación entre el renderer y el proceso principal pasa por canales 
 
 - **Todo queda en el equipo de la usuaria.** La base de datos, la configuración y los backups locales viven en el directorio de datos del sistema operativo. Nada se envía ni se incluye en el instalador.
 - **Sin telemetría.** La app no hace llamadas de red salvo que se configure Dropbox.
-- **Dropbox es opcional.** El token lo ingresa la usuaria y se guarda localmente.
+- **Dropbox es opcional.** La usuaria autoriza su propia app de Dropbox y el *refresh token* se guarda localmente.
 - **Sin datos de clientes en este repositorio.** El código es genérico: esquemas, validadores e interfaz.
 - **Protección contra inyección SQL, XSS y navegación.** Todas las consultas usan sentencias preparadas, todo valor insertado en `innerHTML` pasa por `escaparHtml()` y la navegación externa está restringida a una lista permitida (`src/navigation-security.js`).
 

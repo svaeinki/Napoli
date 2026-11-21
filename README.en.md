@@ -37,7 +37,7 @@ Napoli was built for one specific shop — a real shoe repair business in Chile 
 - **Installment payments (abonos)** — Record a total price, take partial payments, keep a full payment history per item, and compute outstanding balance automatically. Supports cash, card, and transfer.
 - **Thermal ticket printing** — 58 mm and 80 mm receipt formats, with three font profiles for the 58 mm size (`compact`, `readable`, `extra-large`). Header and footer are user-configurable from inside the app.
 - **Automatic local backups** — SQLite file copies are taken on a schedule and on app close, written to the user-data directory.
-- **Optional Dropbox sync** — If the user pastes a Dropbox access token, the same backups are mirrored to the cloud. The token stays on the user's machine; no backend is involved.
+- **Optional Dropbox sync** — If the user authorizes their own Dropbox app (OAuth 2 with PKCE), the same backups are mirrored to the cloud. The refresh token stays on the user's machine; no backend is involved.
 - **Guarded restore flow** — Restoring from a backup validates the file first, takes a pre-restore snapshot, and runs a smoke check afterwards so a corrupt backup can't brick the database.
 - **Dark mode** — Preference persisted per user.
 - **Fully offline** — The app does not require internet to function; Dropbox is strictly opt-in.
@@ -99,7 +99,7 @@ SQLite is already the right engine for a single-tenant desktop app, and `better-
 `DBService` runs the DB inside a worker thread so slow queries can't freeze the UI, but if the worker ever fails to start or crashes, it falls back transparently to in-process "legacy mode." A small `modeTransitionQueue` promise chain serializes the mode switches so the app can't end up with two DB instances at once. This costs some complexity, but it means a worker-thread bug on an end user's machine never leaves them with a broken app.
 
 ### Dropbox instead of a hosted cloud backend
-The shop owner already pays for Dropbox. Shipping a SaaS backend for one shop would mean hosting, auth, uptime, and a monthly bill — for a feature that's already a solved problem. The Dropbox token is pasted in by the user, stored locally, and the app talks to Dropbox directly. No backend servers, no user accounts, no vendor lock-in on my side.
+The shop owner already pays for Dropbox. Shipping a SaaS backend for one shop would mean hosting, auth, uptime, and a monthly bill — for a feature that's already a solved problem. The user authorizes their own Dropbox app, the refresh token is stored locally, and the app talks to Dropbox directly. No backend servers, no user accounts, no vendor lock-in on my side.
 
 ### Vanilla JS, no bundler
 The app has maybe a dozen screens and one user. Pulling in React + Vite + TypeScript would mean a build step, source maps, a watch mode, and a dependency tree to maintain — for UI that doesn't need reactivity beyond `innerHTML` + delegated events. The codebase is split into small modules loaded in a deterministic order, and the boundaries are explicit and easy to reason about.
@@ -171,7 +171,7 @@ Napoli is built for a real business and takes the data seriously:
 
 - **Everything stays on the user's machine.** The SQLite database, the config file, and all local backups live in the OS user-data directory (`~/Library/Application Support/Napoli Reparadora/` on macOS, `%APPDATA%\Napoli Reparadora\` on Windows, `~/.config/Napoli Reparadora/` on Linux). Nothing is tracked, committed, or shipped with the installer.
 - **No telemetry.** The app does not phone home. It makes no network calls unless the user explicitly configures Dropbox.
-- **Dropbox is strictly opt-in.** The Dropbox access token is entered by the user and persisted locally. The app talks to Dropbox directly — there is no server I control in between.
+- **Dropbox is strictly opt-in.** The Dropbox refresh token is obtained through the user's own authorization and persisted locally. The app talks to Dropbox directly — there is no server I control in between.
 - **No customer data in this repository.** The code is generic: schemas, validators, and UI. No customer names, RUTs, transactions, or backup files are committed. A full pre-publish audit (`gitleaks` + `trufflehog --only-verified` + manual PII sweep over the whole git history) found no secrets or business data in any commit.
 - **SQL injection, XSS, and navigation hardening.** All queries use prepared statements. Every value interpolated into `innerHTML` goes through an `escaparHtml()` helper. External URL navigation is restricted to an allowlist (`src/navigation-security.js`).
 

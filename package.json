@@ -8,10 +8,11 @@
     "start": "node scripts/start-electron.js",
     "rebuild": "electron-builder install-app-deps",
     "test": "node --test scripts/tests/*.test.js",
-    "build": "electron-builder --win --mac --linux",
-    "build-mac": "electron-builder --mac",
-    "build-win": "electron-builder --win",
-    "build-linux": "electron-builder --linux",
+    "test:electron": "node scripts/test-electron.js",
+    "build": "node scripts/build-installer.js --win --mac --linux",
+    "build-mac": "node scripts/build-installer.js --mac",
+    "build-win": "node scripts/build-installer.js --win",
+    "build-linux": "node scripts/build-installer.js --linux",
     "check:syntax": "node scripts/check-syntax.js",
     "check:audit": "yarn npm audit --recursive --environment production --severity high",
     "check:build-current": "node scripts/check-build-current.js",
@@ -77,7 +78,9 @@
       "!**/*.map",
       "!dist/**/*",
       "!.yarn/**/*",
-      "!.yarnrc.yml"
+      "!.yarnrc.yml",
+      "!scripts/**/*",
+      "!PROBLEMAS.md"
     ],
     "mac": {
       "category": "public.app-category.business",
