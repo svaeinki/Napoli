@@ -5,6 +5,18 @@ All notable changes to Napoli are documented in this file.
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- Package manager migrated to Yarn 4 (via Corepack, `nodeLinker: node-modules`);
+  CI now installs with `yarn install --immutable`.
+- Spanish README is now the primary `README.md`; English moved to `README.en.md`.
+
+### Security
+- Bumped build-time `node-gyp` to v11 (patched `tar`) and forced `image-size` v2,
+  clearing all high/critical findings from `check:audit`. `excel4node` is patched
+  to use the `image-size` v2 API.
+
 ## [2.0.9] — 2026
 
 ### Changed
@@ -67,6 +79,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Chilean RUT validation (modulo-11 verifier digit).
 - Dark theme.
 
+[Unreleased]: https://github.com/svaeinki/Napoli/compare/v2.0.9...HEAD
 [2.0.9]: https://github.com/svaeinki/Napoli/releases/tag/v2.0.9
 [2.0.8]: https://github.com/svaeinki/Napoli/commits/main
 [2.0.6]: https://github.com/svaeinki/Napoli/releases/tag/v2.0.6

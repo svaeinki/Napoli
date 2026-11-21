@@ -1,91 +1,120 @@
 # 👞 Napoli - Reparadora de Calzado
 
-Sistema profesional de gestión de bodega para reparadora de calzado con base de datos SQLite, backups automáticos en Dropbox, sistema completo de pagos y abonos, tickets térmicos y tema oscuro.
+Sistema de escritorio para gestionar el inventario y los pagos de una reparadora de calzado. Construido con Electron y una base de datos SQLite local, con backups opcionales en Dropbox, sistema de pagos y abonos, tickets térmicos y tema oscuro.
 
-![Version](https://img.shields.io/badge/version-2.0.6-blue.svg)
-![License](https://img.shields.io/badge/license-MIT-green.svg)
-![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)
+[![Estado](https://img.shields.io/badge/estado-en%20producción-success.svg)](#-estado-del-proyecto)
+[![Versión](https://img.shields.io/badge/versión-2.0.9-blue.svg)](./CHANGELOG.md)
+[![Electron](https://img.shields.io/badge/Electron-40-47848F.svg)](https://www.electronjs.org/)
+[![SQLite](https://img.shields.io/badge/SQLite-better--sqlite3-003B57.svg)](https://github.com/WiseLibs/better-sqlite3)
+[![Node](https://img.shields.io/badge/Node-%E2%89%A520-339933.svg)](https://nodejs.org/)
+[![Licencia](https://img.shields.io/badge/licencia-MIT-green.svg)](#-licencia)
+[![Plataforma](https://img.shields.io/badge/plataforma-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)](#-instalación-y-ejecución)
 
 > **English version:** see [`README.en.md`](./README.en.md).
+
+---
+
+## 🎯 El problema
+
+Las reparadoras pequeñas en Chile suelen llevar los pedidos en cuadernos o planillas genéricas. Así es fácil perder tickets, olvidar abonos, calcular mal los saldos o dejar artículos meses en bodega sin darse cuenta. Los sistemas POS comerciales son caros, complejos o están pensados para ventas con código de barras, no para un flujo donde cada artículo es una reparación única con descripción a mano.
+
+Napoli se construyó para una reparadora real en Chile y se usa a diario en el mostrador. Funciona sin internet, imprime tickets térmicos, controla los abonos y se respalda en Dropbox, para que perder el computador no signifique perder el registro.
 
 ---
 
 ## ✨ Características Principales
 
 ### 📦 Gestión de Inventario
-- ✅ Registro completo de artículos y servicios de reparación
-- ✅ Múltiples tipos de servicio (cambio suela, taco, costura, teñido, limpieza, etc.)
+- ✅ Registro de artículos con cliente, RUT, tipo de servicio (cambio de suela, taco, costura, teñido, limpieza, etc.) y valor
 - ✅ Ubicación opcional por artículo (`numeroBodega`)
 - ✅ Estados: "En Bodega" / "Entregado"
-- ✅ Búsqueda avanzada por RUT, nombre y ubicación
+- ✅ Búsqueda por RUT, nombre, ID, ubicación y tipo de artículo, con filtrado en vivo
 - ✅ Filtros por estado
-- ✅ Exportación a CSV
-- ✅ Contador de días en bodega con alertas visuales
+- ✅ Contador de días en bodega con alerta visual a partir de 30 días
+- ✅ Validación de RUT chileno (dígito verificador módulo 11)
 
 ### 🖨️ Tickets Térmicos (58mm/80mm)
-- ✅ **Soporte Impresoras Térmicas**: Configurable para 58mm y 80mm.
-- ✅ **Perfiles de legibilidad 58mm**: `compacto`, `legible` (recomendado), `extra_grande`.
-- ✅ **Diseño Profesional**: Formato tipo "receipt" optimizado para ahorro de papel.
-- ✅ **Configurable**: Posibilidad de personalizar encabezado, pie y perfil tipográfico 58mm desde la app.
+- ✅ Configurable para impresoras de 58mm y 80mm
+- ✅ Perfiles de legibilidad 58mm: `compacto`, `legible` (recomendado), `extra_grande`
+- ✅ Ancho útil 58mm calibrable (44 a 54 mm, por defecto 48 mm)
+- ✅ Vista previa del ticket antes de imprimir
+- ✅ Encabezado y pie de página personalizables desde la app
 
 ### 💰 Sistema de Pagos y Abonos
 - ✅ Registro de valor total del servicio
-- ✅ Abonos iniciales al ingresar artículo
-- ✅ Abonos parciales con historial completo
+- ✅ Abono inicial al ingresar el artículo y abonos parciales posteriores
 - ✅ Cálculo automático de saldo pendiente
 - ✅ Estados de pago: Sin pago / Abonado / Pagado
-- ✅ Múltiples métodos de pago (Efectivo, Tarjetas, Transferencia)
-- ✅ Historial detallado de cada abono
-- ✅ Tickets con desglose de pagos
+- ✅ Métodos de pago: Efectivo, Tarjetas, Transferencia
+- ✅ Historial detallado de cada abono y tickets con desglose de pagos
 
-### 💾 Base de Datos Robusta
-- ✅ SQLite - Base de datos profesional
-- ✅ Sin riesgo de pérdida de datos
-- ✅ Transacciones ACID
-- ✅ Sistema de auditoría completo
-- ✅ Validación de duplicados
+### 💾 Base de Datos
+- ✅ SQLite local mediante `better-sqlite3`
+- ✅ Todas las escrituras dentro de transacciones
+- ✅ Registro de auditoría de acciones por artículo
+- ✅ Capa de base de datos en un *worker thread*, con respaldo automático en modo directo si el worker falla
 
-### ☁️ Backups Automáticos
-- ✅ Backup automático cada 24 horas
-- ✅ Backup al cerrar la aplicación
-- ✅ Formatos: .db (SQLite) y .json
-- ✅ Integración con Dropbox (opcional)
-- ✅ Sincronización automática en la nube
+### ☁️ Backups y Exportación
+- ✅ Backup automático cada 24 horas y al cerrar la aplicación
+- ✅ Formatos de backup: `.db` (SQLite) y `.json`
+- ✅ Limpieza automática de backups locales con más de 30 días
+- ✅ Sincronización opcional con Dropbox
 - ✅ Validación explícita de backups `.db` antes de restaurar
-- ✅ Restauración guiada con rollback automático y smoke check post-restore
+- ✅ Restauración guiada con snapshot previo, rollback automático y verificación post-restore
+- ✅ Exportación de datos a CSV, Excel (`.xlsx`) y JSON
 
 ### 🌙 Tema Oscuro
-- ✅ Toggle para cambiar entre tema claro y oscuro
+- ✅ Alternancia entre tema claro y oscuro
 - ✅ Preferencia guardada automáticamente
+
+### 📴 100% Offline
+- ✅ La app no necesita internet para funcionar; Dropbox es estrictamente opcional
+
+---
+
+## 🧰 Stack Tecnológico
+
+| Capa | Elección |
+| --- | --- |
+| Aplicación | Electron 40 |
+| Lenguaje | JavaScript (sin bundler ni framework) |
+| Base de datos | SQLite vía `better-sqlite3` |
+| Backup en la nube | SDK de Dropbox (opcional, configurado por la usuaria) |
+| Exportación CSV / Excel | `excel4node` |
+| Tests | Runner nativo de Node.js (`node:test`) |
+| Gestor de paquetes | Yarn 4 (vía Corepack) |
+| Build | `electron-builder` (NSIS, DMG, AppImage) |
+| CI | GitHub Actions en matriz (Windows / macOS / Linux) |
 
 ---
 
 ## 🚀 Instalación y Ejecución
 
-Sigue las instrucciones específicas para tu sistema operativo para evitar problemas comunes de compilación.
+Sigue las instrucciones de tu sistema operativo para evitar problemas comunes de compilación.
 
 ### Requisitos del Sistema
 
 | Requisito | Versión mínima | Versión recomendada |
 |-----------|---------------|---------------------|
-| Node.js   | **18.x LTS**  | 20.x o 22.x LTS     |
+| Node.js   | **20.x**      | 22.x LTS            |
 | Yarn      | 4.x           | 4.18.x — se activa con `corepack enable` (en Node ≥25: `npm i -g corepack` primero) |
 | Git       | cualquier     | —                   |
 
-> **Nota:** Node.js 16 ya no es compatible. Usa Node.js 18 o superior.
+> **Nota:** el proyecto usa **Yarn 4**, fijado en el campo `packageManager` de `package.json`. No uses `npm` ni `pnpm`: otro gestor puede dejar `better-sqlite3` compilado para la versión equivocada de Node/Electron.
 
 #### Verificar instalación
 
 ```bash
-node --version   # debe ser v18.x o superior
-yarn --version   # dentro del repo debe mostrar 4.18.x (fijado en packageManager)
+node --version   # debe ser v20.x o superior
+corepack enable  # activa Yarn (una sola vez)
+yarn --version   # dentro del repo debe mostrar 4.18.x
 ```
 
 ---
 
 ### Dependencias nativas por plataforma
 
-La app incluye `better-sqlite3`, un módulo nativo que requiere compilación C++. Instala las herramientas correspondientes a tu sistema **antes** de ejecutar `yarn install`.
+La app incluye `better-sqlite3`, un módulo nativo que puede requerir compilación C++. Instala las herramientas de tu sistema **antes** de ejecutar `yarn install`.
 
 #### macOS
 ```bash
@@ -117,46 +146,34 @@ sudo pacman -S base-devel sqlite
 
 ---
 
-### 🍎 Para Mac (macOS)
+### Instalación Paso a Paso (macOS, Linux y Windows)
 
-#### Instalación Paso a Paso
-Abre tu terminal y ejecuta:
+Los comandos son los mismos en Terminal (macOS/Linux) y en PowerShell (Windows):
 
 ```bash
 # 1. Clonar el repositorio
 git clone https://github.com/svaeinki/Napoli.git
-cd Napoli/zapateria-bodega
+cd Napoli
 
-# 2. Instalar dependencias
+# 2. Activar Yarn (solo la primera vez)
+corepack enable
+
+# 3. Instalar dependencias
 yarn install
 
-# 3. Compilar módulos nativos (CRUCIAL para SQLite)
+# 4. Compilar módulos nativos para Electron (CRUCIAL para SQLite)
 yarn run rebuild
 
-# 4. Iniciar la aplicación
+# 5. Iniciar la aplicación
 yarn start
 ```
 
----
+> En Windows, si el paso 4 falla, verifica que Visual Studio Build Tools esté instalado.
 
-### 🪟 Para Windows
+### Ejecutar los tests
 
-#### Instalación Paso a Paso
-
-```powershell
-# 1. Clonar el repositorio
-git clone https://github.com/svaeinki/Napoli.git
-cd Napoli/zapateria-bodega
-
-# 2. Instalar dependencias
-yarn install
-
-# 3. Compilar módulos nativos
-# Si este paso falla, verifica que Visual Studio Build Tools esté instalado.
-yarn run rebuild
-
-# 4. Iniciar la aplicación
-yarn start
+```bash
+yarn test
 ```
 
 ---
@@ -165,11 +182,11 @@ yarn start
 
 La integración con Dropbox es **completamente opcional** y se configura desde dentro de la aplicación:
 
-1. Abre la app y ve al panel de configuración (icono de engranaje).
+1. Abre la app y ve al panel de configuración (icono de engranaje ⚙️).
 2. Ingresa tu token de acceso a Dropbox.
-3. La app guarda el token **encriptado** en el directorio de datos del usuario.
+3. La app guarda el token **cifrado** en el directorio de datos del usuario.
 
-Comportamiento operativo de seguridad:
+Comportamiento de seguridad:
 - Si `safeStorage` está disponible, el token se guarda cifrado.
 - Si `safeStorage` no está disponible en ese sistema, la app muestra una advertencia explícita y guarda el token sin cifrar en ese equipo.
 - En ese caso, se registra una decisión operativa en `config.json` bajo `operationalDecisions` para trazabilidad.
@@ -178,21 +195,28 @@ No requiere variables de entorno ni archivos `.env`.
 
 ---
 
-### Base de Datos
+### Datos de la Aplicación
 
-La base de datos SQLite se crea **automáticamente** al primer arranque de la aplicación.
+La base de datos SQLite se crea **automáticamente** en el primer arranque. Todo se guarda en el directorio de datos del usuario:
 
-**Ubicación del archivo:**
-- **macOS:** `~/Library/Application Support/Napoli Reparadora/napoli.db`
-- **Windows:** `%APPDATA%\Napoli Reparadora\napoli.db`
+| Sistema | Directorio |
+|---------|-----------|
+| macOS   | `~/Library/Application Support/Napoli Reparadora/` |
+| Windows | `%APPDATA%\Napoli Reparadora\` |
+| Linux   | `~/.config/Napoli Reparadora/` |
 
-Para resetear la base de datos: cierra la app y elimina el archivo `.db`. Se recreará vacía en el próximo arranque.
+Dentro de ese directorio:
+- `napoli.db` — base de datos
+- `config.json` — configuración (impresora, Dropbox, etc.)
+- `backups/` — backups locales
+
+Para resetear la base de datos: cierra la app y elimina `napoli.db`. Se recreará vacía en el próximo arranque.
 
 ---
 
 ## 📦 Generar Builds por Sistema Operativo
 
-Esta sección explica cómo empaquetar instaladores de la app para cada SO usando `electron-builder`.
+Esta sección explica cómo empaquetar instaladores para cada SO usando `electron-builder`.
 
 ### Requisitos previos (build)
 
@@ -207,8 +231,7 @@ yarn run rebuild
 yarn run build-win
 ```
 
-Salida esperada:
-- Archivos de instalación en `dist/` (ejemplo: `.exe` de NSIS para `x64`).
+Salida esperada: instalador `.exe` de NSIS para `x64` en `dist/`.
 
 ### Build para macOS (`.dmg`)
 
@@ -216,8 +239,7 @@ Salida esperada:
 yarn run build-mac
 ```
 
-Salida esperada:
-- Imagen de disco `.dmg` en `dist/`.
+Salida esperada: imagen de disco `.dmg` en `dist/`.
 
 ### Build para Linux (`.AppImage`)
 
@@ -225,8 +247,7 @@ Salida esperada:
 yarn run build-linux
 ```
 
-Salida esperada:
-- Instalador `.AppImage` en `dist/`.
+Salida esperada: instalador `.AppImage` en `dist/`.
 
 ### Build combinada (Windows + macOS + Linux)
 
@@ -234,21 +255,9 @@ Salida esperada:
 yarn run build
 ```
 
-Este script ejecuta:
-- `electron-builder --win --mac --linux`
+Este script ejecuta `electron-builder --win --mac --linux`.
 
-> Recomendación práctica: generar cada build en su SO nativo para evitar problemas de toolchain/firma y acelerar troubleshooting.
-
-### Validación mínima antes de build de release
-
-```bash
-yarn run release:check
-```
-
-Valida:
-1. Sintaxis JS
-2. Auditoría de dependencias runtime
-3. Build del SO actual sin publicar (`check:build-current`)
+> Recomendación práctica: generar cada build en su SO nativo para evitar problemas de toolchain/firma y facilitar el troubleshooting.
 
 ---
 
@@ -262,22 +271,26 @@ yarn run release:check
 
 Este comando valida, en orden:
 1. Sintaxis JS (`check:syntax`)
-2. Seguridad de dependencias runtime (`check:audit`)
-3. Build del SO actual (`check:build-current`)
+2. Seguridad de dependencias de producción (`check:audit`)
+3. Build del SO actual sin publicar (`check:build-current`)
 
 Si cualquiera falla, la release no debe publicarse.
 
 Criterio de seguridad para producción:
-- El objetivo oficial es `yarn npm audit --recursive --environment production` en `0` vulnerabilidades.
-- `yarn install` puede mostrar alertas de dependencias de desarrollo y eso no bloquea release mientras `check:audit` esté en verde.
+- El objetivo oficial es `yarn npm audit --recursive --environment production` sin vulnerabilidades de severidad alta o crítica.
+- `yarn install` puede mostrar advertencias de dependencias de desarrollo; eso no bloquea la release mientras `check:audit` esté en verde.
 
 ### 🚀 Release automático por tag (GitHub Releases)
 
-La publicación oficial ahora se dispara al hacer push de un tag con formato `v*` (por ejemplo `v2.0.6`).
+La publicación oficial se dispara al hacer push de un tag con formato `v*` (por ejemplo `v2.0.9`):
 
 ```bash
+# 1. Sube la versión en package.json y haz commit
+git add -A && git commit -m "release: vX.Y.Z"
+
+# 2. Crea el tag y publícalo
 git tag vX.Y.Z
-git push origin vX.Y.Z
+git push origin main && git push origin vX.Y.Z
 ```
 
 Qué hace el workflow:
@@ -296,14 +309,14 @@ Política de release:
 
 Política operativa actual (uso interno, 1 usuaria):
 - Se permite distribución sin firma de código en esta etapa.
-- Debe asumirse advertencia de Gatekeeper/SmartScreen como comportamiento esperado.
+- Debe asumirse la advertencia de Gatekeeper/SmartScreen como comportamiento esperado.
 - Si la distribución se amplía a público general, la firma/notarización pasa a ser requisito obligatorio.
 
 ---
 
 ## 🔄 Actualizar sin perder datos (recomendado)
 
-> Estrategia actual: actualización **manual** con instalador NSIS nuevo encima de la instalación existente (sin auto-update integrado).
+> Estrategia actual: actualización **manual** con el instalador nuevo encima de la instalación existente (sin auto-update integrado).
 
 ### Método recomendado
 1. En la app actual, ve a **💾 Backups**.
@@ -311,7 +324,7 @@ Política operativa actual (uso interno, 1 usuaria):
 3. Usa **🧪 Validar Backup** sobre ese `.db`.
 4. (Opcional recomendado) confirma que Dropbox esté conectado.
 5. Cierra completamente la app.
-6. Ejecuta el instalador `.exe` nuevo **encima de la instalación actual**.
+6. Ejecuta el instalador nuevo **encima de la instalación actual**.
 7. Abre la app actualizada y verifica:
    - Que la versión cambió.
    - Que los datos siguen intactos.
@@ -327,7 +340,7 @@ Política operativa actual (uso interno, 1 usuaria):
 > La restauración crea un snapshot previo (`napoli_pre_restore_*.db`) y aplica rollback automático si algo falla.
 
 ### Importante
-- El formato oficial de recuperación completa es **backup `.db`**.
+- El formato oficial de recuperación completa es el **backup `.db`**.
 - **JSON / CSV / Excel** sirven para exportar datos, pero **no** reemplazan una restauración completa de la app.
 
 ---
@@ -338,21 +351,26 @@ Política operativa actual (uso interno, 1 usuaria):
 ```
 Error: The module '.../better_sqlite3.node' was compiled against a different Node.js version
 ```
-**Solución:** Ejecuta `yarn run rebuild` para recompilar el módulo nativo para la versión de Electron instalada.
+**Solución:** ejecuta `yarn run rebuild` para recompilar el módulo nativo para la versión de Electron instalada.
+
+> Usa `yarn run rebuild` (con `run`). El comando integrado `yarn rebuild` es otra cosa: recompila contra Node, no contra Electron, y no soluciona este error.
+
+### `This project is configured to use yarn`
+Aparece si intentas usar `pnpm` u otra versión de Yarn: `package.json` fija Yarn 4.18.1. Ejecuta `corepack enable` y usa `yarn`. Si por error corriste `npm install`, borra `node_modules/` y `package-lock.json` y vuelve a ejecutar `yarn install`.
 
 ### Advertencia de seguridad en macOS al abrir el instalador
 macOS muestra una advertencia porque la app no está firmada con un certificado de Apple Developer Program. Para abrirla de todos modos:
-1. Intenta abrir el .dmg normalmente — aparece el error.
+1. Intenta abrir el `.dmg` normalmente — aparece el error.
 2. Ve a **Ajustes del Sistema → Privacidad y Seguridad** y busca la opción para abrir la app igualmente.
 
-### Windows SmartScreen bloquea el instalador .exe
+### Windows SmartScreen bloquea el instalador `.exe`
 SmartScreen advierte sobre apps sin firma de código. Haz clic en **"Más información" → "Ejecutar de todos modos"**. Este comportamiento es normal para distribución sin firma digital.
 
 ### Error `node-gyp` en Windows
 ```
 gyp ERR! build error
 ```
-**Solución:** Verifica que **Visual Studio Build Tools 2022** esté instalado correctamente con el workload "Desarrollo de escritorio con C++". Consulta la sección [Dependencias nativas por plataforma](#dependencias-nativas-por-plataforma) más arriba.
+**Solución:** verifica que **Visual Studio Build Tools 2022** esté instalado correctamente con el workload "Desarrollo de escritorio con C++". Consulta la sección [Dependencias nativas por plataforma](#dependencias-nativas-por-plataforma).
 
 ---
 
@@ -367,44 +385,101 @@ gyp ERR! build error
 
 ### Ingresar Nuevo Artículo
 1. Click en **"➕ Ingresar Artículo"**.
-2. Completa los datos (RUT se valida automáticamente).
+2. Completa los datos (el RUT se valida automáticamente).
 3. `Ubicación` es opcional.
 4. Click en **"💾 Guardar e Imprimir Ticket"**.
 5. ¡Listo! Se imprimirá el ticket con el perfil seleccionado.
 
 ---
 
-## 🏗️ Estructura del Proyecto
+## 🏗️ Arquitectura y Estructura del Proyecto
+
 ```
-zapateria-bodega/
+Napoli/
+├── main.js                      # Proceso principal: handlers IPC, archivos, config, backups, Dropbox
 ├── src/
-│   ├── html/                    # Templates HTML
-│   │   ├── modal-config.html    # Config de impresión
-│   │   ├── ticket.html          # Template base
-│   │   └── ...
+│   ├── preload.js               # Puente seguro: expone window.electronAPI al renderer
+│   ├── db-service.js            # Orquestador de DB: worker thread con respaldo en modo directo
+│   ├── db-worker.js             # Worker thread dueño de la conexión SQLite
+│   ├── database.js              # Wrapper de better-sqlite3: esquema, migraciones y consultas
+│   ├── dropbox.js               # Integración con Dropbox (opcional)
+│   ├── chile-date.js            # Fechas en formato chileno
+│   ├── navigation-security.js   # Lista permitida de URLs externas (solo dropbox.com)
+│   ├── sqlite-restore-utils.js  # Restauración atómica y snapshot previo
+│   ├── backup-filename.js       # Nombres únicos para archivos de backup
+│   ├── diagnostics.js           # Registro de eventos de diagnóstico
+│   ├── index.html               # Estructura principal del renderer
+│   ├── html/
+│   │   ├── tab-*.html           # Contenido de cada pestaña (se carga al iniciar)
+│   │   ├── modal-*.html         # Modales (configuración, pagos, ticket, confirmación)
+│   │   └── ticket.html          # Template base del ticket
+│   ├── js/                      # Módulos del renderer (inventario, búsqueda, pagos, tickets, ...)
 │   ├── css/
-│   │   ├── styles.css           # Estilos UI
-│   │   └── ticket.css           # Estilos de impresión térmicos
-│   ├── js/
-│   │   ├── tickets.js           # Lógica de tickets térmicos
-│   │   ├── config.js            # Lógica de configuración
-│   │   └── ...
-│   ├── database.js              # Gestión de SQLite
-│   ├── preload.js               # Puente seguro Electron
-│   └── index.html               # Estructura principal
-├── main.js                      # Proceso principal
-└── package.json                 # Dependencias
+│   │   ├── styles.css           # Estilos de la interfaz
+│   │   └── ticket.css           # Estilos de impresión térmica
+│   └── assets/                  # Logo
+├── scripts/
+│   ├── tests/                   # Suites de node:test
+│   ├── check-syntax.js          # Verificación de sintaxis
+│   ├── check-build-current.js   # Build del SO actual sin publicar
+│   └── start-electron.js        # Arranque en desarrollo
+├── build/                       # Iconos de la app
+├── .github/workflows/           # Workflow de release por tag
+└── package.json
 ```
+
+Toda la comunicación entre el renderer y el proceso principal pasa por canales IPC expuestos en `preload.js`. Cada handler devuelve `{ success, data? }` o `{ success: false, error, code? }` (nunca lanza excepciones) y se bloquea de inmediato durante una restauración de la base de datos, para que ninguna acción de la interfaz pueda corromperla.
+
+---
+
+## 🧠 Decisiones Técnicas
+
+- **`better-sqlite3` en lugar de un ORM.** Para una app de escritorio de un solo negocio, SQLite es el motor adecuado. `better-sqlite3` es síncrono, transaccional y no requiere configuración. Las migraciones son `ALTER TABLE` idempotentes y todas las consultas usan sentencias preparadas.
+- **Base de datos en un *worker thread* con respaldo.** `DBService` ejecuta la base de datos en un worker para que las consultas lentas no congelen la interfaz. Si el worker no arranca o falla, cambia de forma transparente a acceso directo en el proceso principal.
+- **Dropbox en vez de un backend propio.** La dueña del local ya usa Dropbox. Un backend propio implicaría hosting, autenticación y costos mensuales para algo que ya está resuelto. La app habla directamente con Dropbox, sin servidores intermedios.
+- **JavaScript sin bundler.** Son una docena de pantallas y una usuaria. Módulos pequeños cargados en orden fijo bastan, sin pasos de build ni dependencias extra.
+- **Restauración protegida.** Restaurar un backup es la acción más riesgosa: primero se valida el archivo, luego se toma un snapshot de la base actual, se reemplaza de forma atómica y se verifica el resultado. Si algo falla, se vuelve al snapshot.
+
+---
+
+## 🔒 Privacidad y Manejo de Datos
+
+- **Todo queda en el equipo de la usuaria.** La base de datos, la configuración y los backups locales viven en el directorio de datos del sistema operativo. Nada se envía ni se incluye en el instalador.
+- **Sin telemetría.** La app no hace llamadas de red salvo que se configure Dropbox.
+- **Dropbox es opcional.** El token lo ingresa la usuaria y se guarda localmente.
+- **Sin datos de clientes en este repositorio.** El código es genérico: esquemas, validadores e interfaz.
+- **Protección contra inyección SQL, XSS y navegación.** Todas las consultas usan sentencias preparadas, todo valor insertado en `innerHTML` pasa por `escaparHtml()` y la navegación externa está restringida a una lista permitida (`src/navigation-security.js`).
+
+Para reportar vulnerabilidades, consulta [`SECURITY.md`](./SECURITY.md).
+
+---
+
+## 📈 Estado del Proyecto
+
+- **En producción.** Versión actual **2.0.9**, en uso diario en una reparadora de calzado en Chile desde **noviembre de 2025**.
+- En mantenimiento activo. Las mejoras se guían por las necesidades reales del mostrador.
 
 ---
 
 ## 📝 Changelog
 
+El historial oficial de versiones está en [`CHANGELOG.md`](./CHANGELOG.md). Resumen en español:
+
+### Sin publicar
+- 📦 Gestor de paquetes migrado a **Yarn 4** (vía Corepack, con `nodeLinker: node-modules`).
+- 🛡️ Dependencias de build actualizadas (`node-gyp` 11, `image-size` 2) para dejar `check:audit` sin vulnerabilidades altas o críticas.
+- 📘 README en español como documento principal; versión en inglés en `README.en.md`.
+
+### v2.0.9
+- 🧹 Limpieza y refactorización en las capas de base de datos, backups e IPC.
+- 🛡️ Validaciones de release y flujo de seguridad de dependencias reforzados.
+- 🖨️ Ticket 58mm: corrección del margen superior y de la compensación de recorte.
+
 ### v2.0.8 (2026-02-28)
 - ✅ Workflow de release endurecido con quality gate previo (`test`, `check:syntax`, `check:audit`) antes de compilar instaladores.
 - 🧪 Nuevo check portable local: `check:build-current`, y `release:check` actualizado para no depender de cross-build de Windows desde macOS/Linux.
 - 🔧 Limpieza de tooling de rebuild: `postinstall`/`rebuild` migrados a `electron-builder install-app-deps` y remoción de `electron-rebuild` legacy.
-- 🛡️ Criterio de seguridad formalizado para producción: gate por `pnpm audit --prod` (runtime).
+- 🛡️ Criterio de seguridad formalizado para producción: gate por `npm audit --omit=dev` (runtime).
 - 🔐 Política explícita para Dropbox sin cifrado local: advertencia visible + registro de decisión operativa en `config.json`.
 - 📘 Documentación de política de firma actualizada para escenario interno de una usuaria.
 
@@ -427,20 +502,18 @@ zapateria-bodega/
 ### v2.0.3 (2026-02-22)
 - 🔄 Flujo formalizado de actualización manual en Windows con instalador NSIS (in-place update).
 - ✅ Guía de actualización reforzada: backup `.db`, cierre de app, instalación encima, verificación post-update y recuperación limpia.
-- 🧾 Versionado y documentación alineados a `2.0.3`.
 
 ### v2.0.2 (2026-02-22)
 - 🖨️ Perfiles tipográficos para tickets 58mm: `compacto`, `legible` y `extra_grande`.
 - 📄 Tickets sin QR (flujo simplificado de impresión).
-- 🧾 Versión y documentación alineadas a `2.0.2` con ubicación opcional en inventario.
+- 📍 Ubicación opcional en inventario.
 
 ### v2.0.1 (2026-02-22)
 - 🔒 Migración de exportación Excel a `excel4node` para eliminar vulnerabilidades HIGH/CRITICAL en dependencias runtime.
 - 🛡️ Fail-fast en IPC `db:*` y `pago:*` durante restauración de DB para evitar errores por concurrencia.
 - ✅ Nuevo gate de release: `check:syntax`, `check:audit`, `check:build-win` y `release:check`.
-- 🧾 Versionado y documentación alineados a `2.0.1`.
 
-### v2.0.0 (2024-12-03)
+### v2.0.0
 - ✨ Sistema de tema claro/oscuro
 - ✨ Validación de RUT chileno
 - ✨ Sistema completo de pagos y abonos
@@ -451,7 +524,13 @@ zapateria-bodega/
 
 ## 📄 Licencia
 
-MIT License - Libre para usar y modificar
+MIT — ver [`LICENSE`](./LICENSE).
+
+---
+
+## 📬 Contacto
+
+**Diego Moreno** — [github.com/svaeinki](https://github.com/svaeinki)
 
 ---
 

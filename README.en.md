@@ -54,6 +54,7 @@ Napoli was built for one specific shop — a real shoe repair business in Chile 
 | Cloud backup | Dropbox SDK (optional, user-configured) |
 | CSV / Excel export | `excel4node` |
 | Tests | Node.js built-in `node:test` runner |
+| Package manager | Yarn 4 (via Corepack) |
 | Build | `electron-builder` (NSIS, DMG, AppImage) |
 | CI | GitHub Actions matrix (Windows / macOS / Linux) |
 
@@ -118,11 +119,11 @@ Restoring a backup is the single most dangerous user action in the app: a bad fi
 
 ### Run from source
 
-Requires Node.js ≥ 20.
+Requires Node.js ≥ 20 and Yarn 4 (enable it once with `corepack enable`).
 
 ```bash
-git clone https://github.com/svaeinki/napoli.git
-cd napoli
+git clone https://github.com/svaeinki/Napoli.git
+cd Napoli
 yarn install
 yarn run rebuild   # recompiles better-sqlite3 against Electron's Node ABI
 yarn start
@@ -159,7 +160,7 @@ Releases are driven by pushing a `v*` tag. A GitHub Actions matrix builds on Win
 ## Project status
 
 - **In production.** Currently version **2.0.9** and in daily use at a real shoe repair shop in Chile since **November 2025** (first commit: 2025-11-27).
-- Actively maintained. The changelog lives in the git log for now — see [suggested next steps](#whats-next).
+- Actively maintained. See [`CHANGELOG.md`](./CHANGELOG.md) for the release history.
 - Bug reports and real-world pain points from the shop owner drive the roadmap more than feature wishlists.
 
 ---
@@ -168,7 +169,7 @@ Releases are driven by pushing a `v*` tag. A GitHub Actions matrix builds on Win
 
 Napoli is built for a real business and takes the data seriously:
 
-- **Everything stays on the user's machine.** The SQLite database, the config file, and all local backups live in the OS user-data directory (`~/Library/Application Support/Napoli Reparadora/` on macOS, `%APPDATA%\Napoli Reparadora\` on Windows). Nothing is tracked, committed, or shipped with the installer.
+- **Everything stays on the user's machine.** The SQLite database, the config file, and all local backups live in the OS user-data directory (`~/Library/Application Support/Napoli Reparadora/` on macOS, `%APPDATA%\Napoli Reparadora\` on Windows, `~/.config/Napoli Reparadora/` on Linux). Nothing is tracked, committed, or shipped with the installer.
 - **No telemetry.** The app does not phone home. It makes no network calls unless the user explicitly configures Dropbox.
 - **Dropbox is strictly opt-in.** The Dropbox access token is entered by the user and persisted locally. The app talks to Dropbox directly — there is no server I control in between.
 - **No customer data in this repository.** The code is generic: schemas, validators, and UI. No customer names, RUTs, transactions, or backup files are committed. A full pre-publish audit (`gitleaks` + `trufflehog --only-verified` + manual PII sweep over the whole git history) found no secrets or business data in any commit.
@@ -180,7 +181,6 @@ Napoli is built for a real business and takes the data seriously:
 
 Realistic near-term items on the list:
 
-- `CHANGELOG.md` to replace the current "read the git log" answer.
 - Linux build hardening (currently x64 AppImage only).
 - An optional encrypted backup mode for users who want zero-trust on Dropbox.
 - A small "shop dashboard" view: items-in-storage-by-age histogram, monthly revenue, top service types.
