@@ -1,0 +1,45 @@
+diff --git a/distribution/lib/drawing/picture.js b/distribution/lib/drawing/picture.js
+index 79c07540a1f1607bcef17a8aaddb19c2d481fb02..0b0de60645fec7bd8efaca565e39793b5b89461f 100644
+--- a/distribution/lib/drawing/picture.js
++++ b/distribution/lib/drawing/picture.js
+@@ -13,7 +13,8 @@ function _isNativeReflectConstruct() { if (typeof Reflect === "undefined" || !Re
+ function _getPrototypeOf(o) { _getPrototypeOf = Object.setPrototypeOf ? Object.getPrototypeOf.bind() : function _getPrototypeOf(o) { return o.__proto__ || Object.getPrototypeOf(o); }; return _getPrototypeOf(o); }
+ var Drawing = require('./drawing.js');
+ var path = require('path');
+-var imgsz = require('image-size');
++var fs = require('fs');
++var imgsz = require('image-size').imageSize; // image-size v2: API nombrada, solo Buffer
+ var mime = require('mime');
+ var uniqueId = require('lodash.uniqueid');
+ var EMU = require('../classes/emu.js');
+@@ -52,7 +53,7 @@ var Picture = /*#__PURE__*/function (_Drawing) {
+     _this.imagePath = opts.path;
+     _this.image = opts.image;
+     _this._name = _this.image ? opts.name || uniqueId('image-') : opts.name || path.basename(_this.imagePath);
+-    var size = imgsz(_this.imagePath || _this.image);
++    var size = imgsz(_this.imagePath ? fs.readFileSync(_this.imagePath) : _this.image);
+     _this._pxWidth = size.width;
+     _this._pxHeight = size.height;
+     _this._extension = _this.image ? size.type : path.extname(_this.imagePath).substr(1);
+diff --git a/source/lib/drawing/picture.js b/source/lib/drawing/picture.js
+index 741e5e1717f80121ffe0f0e17403f5c55be19137..a1cee85fc88459918dc29bdf6d48436260f6b672 100644
+--- a/source/lib/drawing/picture.js
++++ b/source/lib/drawing/picture.js
+@@ -1,6 +1,7 @@
+ const Drawing = require('./drawing.js');
+ const path = require('path');
+-const imgsz = require('image-size');
++const fs = require('fs');
++const imgsz = require('image-size').imageSize; // image-size v2: API nombrada, solo Buffer
+ const mime = require('mime');
+ const uniqueId = require('lodash.uniqueid');
+ 
+@@ -41,7 +42,7 @@ class Picture extends Drawing {
+             opts.name || uniqueId('image-') :
+             opts.name || path.basename(this.imagePath);
+ 
+-        const size = imgsz(this.imagePath || this.image);
++        const size = imgsz(this.imagePath ? fs.readFileSync(this.imagePath) : this.image);
+ 
+         this._pxWidth = size.width;
+         this._pxHeight = size.height;

@@ -67,7 +67,7 @@ Sigue las instrucciones específicas para tu sistema operativo para evitar probl
 | Requisito | Versión mínima | Versión recomendada |
 |-----------|---------------|---------------------|
 | Node.js   | **18.x LTS**  | 20.x o 22.x LTS     |
-| pnpm      | 9.x           | 11.x — instala vía `corepack enable` o `npm i -g pnpm` |
+| Yarn      | 4.x           | 4.18.x — se activa con `corepack enable` (en Node ≥25: `npm i -g corepack` primero) |
 | Git       | cualquier     | —                   |
 
 > **Nota:** Node.js 16 ya no es compatible. Usa Node.js 18 o superior.
@@ -76,14 +76,14 @@ Sigue las instrucciones específicas para tu sistema operativo para evitar probl
 
 ```bash
 node --version   # debe ser v18.x o superior
-pnpm --version   # debe ser v9.x o superior
+yarn --version   # dentro del repo debe mostrar 4.18.x (fijado en packageManager)
 ```
 
 ---
 
 ### Dependencias nativas por plataforma
 
-La app incluye `better-sqlite3`, un módulo nativo que requiere compilación C++. Instala las herramientas correspondientes a tu sistema **antes** de ejecutar `pnpm install`.
+La app incluye `better-sqlite3`, un módulo nativo que requiere compilación C++. Instala las herramientas correspondientes a tu sistema **antes** de ejecutar `yarn install`.
 
 #### macOS
 ```bash
@@ -126,13 +126,13 @@ git clone https://github.com/svaeinki/Napoli.git
 cd Napoli/zapateria-bodega
 
 # 2. Instalar dependencias
-pnpm install
+yarn install
 
 # 3. Compilar módulos nativos (CRUCIAL para SQLite)
-pnpm run rebuild
+yarn run rebuild
 
 # 4. Iniciar la aplicación
-pnpm start
+yarn start
 ```
 
 ---
@@ -147,14 +147,14 @@ git clone https://github.com/svaeinki/Napoli.git
 cd Napoli/zapateria-bodega
 
 # 2. Instalar dependencias
-pnpm install
+yarn install
 
 # 3. Compilar módulos nativos
 # Si este paso falla, verifica que Visual Studio Build Tools esté instalado.
-pnpm run rebuild
+yarn run rebuild
 
 # 4. Iniciar la aplicación
-pnpm start
+yarn start
 ```
 
 ---
@@ -195,14 +195,14 @@ Esta sección explica cómo empaquetar instaladores de la app para cada SO usand
 ### Requisitos previos (build)
 
 ```bash
-pnpm install
-pnpm run rebuild
+yarn install
+yarn run rebuild
 ```
 
 ### Build para Windows (NSIS `.exe`)
 
 ```bash
-pnpm run build-win
+yarn run build-win
 ```
 
 Salida esperada:
@@ -211,7 +211,7 @@ Salida esperada:
 ### Build para macOS (`.dmg`)
 
 ```bash
-pnpm run build-mac
+yarn run build-mac
 ```
 
 Salida esperada:
@@ -220,7 +220,7 @@ Salida esperada:
 ### Build para Linux (`.AppImage`)
 
 ```bash
-pnpm run build-linux
+yarn run build-linux
 ```
 
 Salida esperada:
@@ -229,7 +229,7 @@ Salida esperada:
 ### Build combinada (Windows + macOS + Linux)
 
 ```bash
-pnpm run build
+yarn run build
 ```
 
 Este script ejecuta:
@@ -240,7 +240,7 @@ Este script ejecuta:
 ### Validación mínima antes de build de release
 
 ```bash
-pnpm run release:check
+yarn run release:check
 ```
 
 Valida:
@@ -255,7 +255,7 @@ Valida:
 Antes de publicar una versión, ejecuta:
 
 ```bash
-pnpm run release:check
+yarn run release:check
 ```
 
 Este comando valida, en orden:
@@ -266,8 +266,8 @@ Este comando valida, en orden:
 Si cualquiera falla, la release no debe publicarse.
 
 Criterio de seguridad para producción:
-- El objetivo oficial es `pnpm audit --prod` en `0` vulnerabilidades.
-- `pnpm install` puede mostrar alertas de dependencias de desarrollo y eso no bloquea release mientras `check:audit` esté en verde.
+- El objetivo oficial es `yarn npm audit --recursive --environment production` en `0` vulnerabilidades.
+- `yarn install` puede mostrar alertas de dependencias de desarrollo y eso no bloquea release mientras `check:audit` esté en verde.
 
 ### 🚀 Release automático por tag (GitHub Releases)
 
@@ -279,7 +279,7 @@ git push origin vX.Y.Z
 ```
 
 Qué hace el workflow:
-1. Ejecuta un **quality gate** previo (`pnpm test`, `check:syntax`, `check:audit`).
+1. Ejecuta un **quality gate** previo (`yarn test`, `check:syntax`, `check:audit`).
 2. Build en matriz por SO nativo: Windows, macOS y Linux.
 3. Genera instaladores `x64` por plataforma.
 4. Publica/actualiza el GitHub Release del tag.
@@ -336,7 +336,7 @@ Política operativa actual (uso interno, 1 usuaria):
 ```
 Error: The module '.../better_sqlite3.node' was compiled against a different Node.js version
 ```
-**Solución:** Ejecuta `pnpm run rebuild` para recompilar el módulo nativo para la versión de Electron instalada.
+**Solución:** Ejecuta `yarn run rebuild` para recompilar el módulo nativo para la versión de Electron instalada.
 
 ### Advertencia de seguridad en macOS al abrir el instalador
 macOS muestra una advertencia porque la app no está firmada con un certificado de Apple Developer Program. Para abrirla de todos modos:

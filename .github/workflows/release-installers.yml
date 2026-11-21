@@ -16,26 +16,26 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+      - name: Enable Corepack
+        run: corepack enable
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: pnpm
+          cache: yarn
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: yarn install --immutable
 
       - name: Run tests
-        run: pnpm test
+        run: yarn test
 
       - name: Check syntax
-        run: pnpm run check:syntax
+        run: yarn run check:syntax
 
       - name: Audit runtime dependencies
-        run: pnpm run check:audit
+        run: yarn run check:audit
 
   build:
     name: Build ${{ matrix.os_name }} installer
@@ -47,17 +47,17 @@ jobs:
         include:
           - os_name: Windows
             runner: windows-latest
-            build_command: pnpm run build-win -- --publish never
+            build_command: yarn run build-win --publish never
             artifact_name: installer-windows
             artifact_glob: dist/*.exe
           - os_name: macOS
             runner: macos-15-intel
-            build_command: pnpm run build-mac -- --publish never
+            build_command: yarn run build-mac --publish never
             artifact_name: installer-macos
             artifact_glob: dist/*.dmg
           - os_name: Linux
             runner: ubuntu-latest
-            build_command: pnpm run build-linux -- --publish never
+            build_command: yarn run build-linux --publish never
             artifact_name: installer-linux
             artifact_glob: dist/*.AppImage
 
@@ -65,17 +65,17 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+      - name: Enable Corepack
+        run: corepack enable
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: pnpm
+          cache: yarn
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: yarn install --immutable
 
       - name: Build installer
         run: ${{ matrix.build_command }}

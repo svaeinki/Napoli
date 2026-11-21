@@ -2,13 +2,13 @@ const { spawnSync } = require('child_process');
 
 function resolveBuildCommand(platform) {
     if (platform === 'darwin') {
-        return ['pnpm', ['run', 'build-mac', '--', '--publish', 'never']];
+        return ['yarn', ['run', 'build-mac', '--publish', 'never']];
     }
     if (platform === 'win32') {
-        return ['pnpm.cmd', ['run', 'build-win', '--', '--publish', 'never']];
+        return ['yarn.cmd', ['run', 'build-win', '--publish', 'never']];
     }
     if (platform === 'linux') {
-        return ['pnpm', ['run', 'build-linux', '--', '--publish', 'never']];
+        return ['yarn', ['run', 'build-linux', '--publish', 'never']];
     }
     return null;
 }
@@ -22,7 +22,9 @@ if (!command) {
 const [bin, args] = command;
 const result = spawnSync(bin, args, {
     stdio: 'inherit',
-    cwd: process.cwd()
+    cwd: process.cwd(),
+    // Desde Node 20.12, ejecutar un .cmd en Windows requiere shell (si no, EINVAL).
+    shell: process.platform === 'win32'
 });
 
 if (result.status !== 0) {

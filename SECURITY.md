@@ -43,7 +43,7 @@ Out of scope:
 - The live production data of the shop that uses this app — that data is
   owned by its operator and is not part of this repository.
 - Vulnerabilities in third-party dependencies that are already tracked upstream
-  (`pnpm audit` is run on every release; please report upstream first when
+  (`yarn npm audit` is run on every release; please report upstream first when
   possible).
 - Social engineering, physical access, or attacks requiring the attacker to
   already have admin access to the machine running the app.

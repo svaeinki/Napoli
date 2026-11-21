@@ -9,33 +9,33 @@ Napoli is an **Electron desktop app** for managing a shoe repair shop's inventor
 ## Commands
 
 ```bash
-# Install and compile native modules (required after pnpm install)
-pnpm install && pnpm run rebuild
+# Install and compile native modules (required after yarn install)
+yarn install && yarn run rebuild
 
 # Run the app in development
-pnpm start
+yarn start
 
 # Run all tests
-pnpm test
+yarn test
 
 # Run a single test file
 node --test scripts/tests/database-migration.test.js
 
 # Syntax check
-pnpm run check:syntax
+yarn run check:syntax
 
 # Pre-release validation (syntax + audit + current-platform build)
-pnpm run release:check
+yarn run release:check
 
 # Build installers (run on native OS for best results)
-pnpm run build-mac     # .dmg
-pnpm run build-win     # .exe (NSIS)
-pnpm run build-linux   # .AppImage
+yarn run build-mac     # .dmg
+yarn run build-win     # .exe (NSIS)
+yarn run build-linux   # .AppImage
 ```
 
-**Note:** `better-sqlite3` is a native module. After updating Electron or Node versions, always run `pnpm run rebuild` to recompile it (use `run` explicitly — pnpm's own built-in `pnpm rebuild` command is a different thing and rebuilds against plain Node, not Electron). Requires Node >=20.
+**Note:** `better-sqlite3` is a native module. After updating Electron or Node versions, always run `yarn run rebuild` to recompile it (use `run` explicitly — Yarn's own built-in `yarn rebuild` command is a different thing and rebuilds against plain Node, not Electron). Requires Node >=20.
 
-**Package manager:** This project uses **pnpm** (pinned via the `packageManager` field in `package.json`). Do not use `npm` or `yarn` — a mismatched package manager can produce a `node_modules` layout with `better-sqlite3` compiled against the wrong Node/Electron ABI, causing a `NODE_MODULE_VERSION` mismatch at startup.
+**Package manager:** This project uses **Yarn 4** via Corepack (pinned via the `packageManager` field in `package.json`; run `corepack enable` once). `.yarnrc.yml` sets `nodeLinker: node-modules` — Plug'n'Play is incompatible with electron-builder and native modules, so never remove it. Yarn 4 disables dependency build scripts by default; native packages that need them (`better-sqlite3`, `electron`, `electron-winstaller`) are allowlisted in `dependenciesMeta` in `package.json`. `resolutions` forces `node-gyp ^11` and `image-size ^2` to clear high-severity audit findings (`tar`, `image-size`); because `image-size` v2 changed its API, `excel4node` is patched via `.yarn/patches/excel4node-*.patch` — if you upgrade `excel4node`, re-check whether the patch is still needed (`yarn patch excel4node`). Do not use `npm` or `pnpm` — a mismatched package manager can produce a `node_modules` layout with `better-sqlite3` compiled against the wrong Node/Electron ABI, causing a `NODE_MODULE_VERSION` mismatch at startup.
 
 ## Architecture
 
