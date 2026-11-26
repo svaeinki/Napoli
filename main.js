@@ -14,25 +14,29 @@ const {
     replaceFileAtomically,
     stageRestoreFile
 } = require('./src/main/sqlite-restore-utils');
+const estado = require('./src/main/estado');
+const { USER_DATA_PATH, DB_PATH, CONFIG_PATH, BACKUPS_PATH, BACKUP_STATUS_PATH } = require('./src/main/rutas');
+const {
+    RESTORE_BUSY_MESSAGE,
+    logDiag,
+    medirOperacionDb,
+    timestampIsoSeguro,
+    escribirJsonAtomico,
+    eliminarArchivoParcial,
+    operacionBloqueadaPorRestore,
+    respuestaBloqueoRestoreEscritura,
+    payloadErrorOperacion,
+    withTimeout
+} = require('./src/main/utilidades');
 
-let mainWindow;
-let dbService;
-let dropboxManager;
-let diagnostics;
 let workerRetryTimer = null;
 let workerRetryCount = 0;
 
-const USER_DATA_PATH = app.getPath('userData');
-const DB_PATH = path.join(USER_DATA_PATH, 'napoli.db');
-const CONFIG_PATH = path.join(USER_DATA_PATH, 'config.json');
-const BACKUPS_PATH = path.join(USER_DATA_PATH, 'backups');
-const BACKUP_STATUS_PATH = path.join(USER_DATA_PATH, 'backup-status.json');
 const BACKUP_CLOSE_TIMEOUT_MS = 15000;
 const DROPBOX_UPLOAD_TIMEOUT_MS = 12000;
 const DB_WORKER_RETRY_INTERVAL_MS = 30000;
 const DB_WORKER_MAX_RETRIES = 10;
 const REQUIRED_BACKUP_TABLES = ['articulos', 'abonos', 'auditoria'];
-const RESTORE_BUSY_MESSAGE = 'Restauración en curso. Intente nuevamente al terminar.';
 const WARNING_TOKEN_NO_CIFRADO = 'Tu sistema no permite cifrado local del token de Dropbox; se guardará sin cifrar en este equipo.';
 const INSECURE_STORAGE_RESPONSE_CODE = 'INSECURE_STORAGE';
 const OP_DECISION_DROPBOX_TOKEN_SIN_CIFRADO = 'DROPBOX_TOKEN_SIN_CIFRADO';
@@ -48,44 +52,8 @@ const PRINTER_CONFIG_DEFAULTS = Object.freeze({
     header: 'NAPOLI\nReparadora de Calzado',
     footer: 'Gracias por preferir Napoli\nConserve este ticket'
 });
-let restauracionEnCurso = false;
-let restauracionPromesa = null;
 const rutasAprobadasPorDialogo = new Set();
 const RUTAS_APROBADAS_MAX = 20;
-const generarTimestampUnico = createUniqueTimestampGenerator();
-
-function logDiag(type, payload = {}) {
-    if (diagnostics && typeof diagnostics.log === 'function') {
-        diagnostics.log(type, payload);
-    }
-}
-
-async function medirOperacionDb(op, fn) {
-    const startedAt = Date.now();
-    let ok = false;
-    try {
-        const result = await fn();
-        ok = true;
-        return result;
-    } finally {
-        const durationMs = Date.now() - startedAt;
-        logDiag('db:operation', {
-            op,
-            ok,
-            durationMs,
-            mode: dbService ? dbService.getMode() : 'unavailable'
-        });
-    }
-}
-
-// Crear carpeta de backups si no existe
-if (!fs.existsSync(BACKUPS_PATH)) {
-    fs.mkdirSync(BACKUPS_PATH, { recursive: true });
-}
-
-function timestampIsoSeguro() {
-    return generarTimestampUnico();
-}
 
 function cargarEstadoBackups({ strict = false } = {}) {
     try {
@@ -303,16 +271,16 @@ function construirLogValidacion(resultadoValidacion, source = 'manual') {
 }
 
 async function restaurarBackupDB(rutaBackup) {
-    if (restauracionEnCurso) {
+    if (estado.restauracionEnCurso) {
         return { success: false, restoredPath: null, rollbackUsed: false, error: 'Ya hay una restauración en curso' };
     }
 
-    if (restauracionPromesa) {
-        return await restauracionPromesa;
+    if (estado.restauracionPromesa) {
+        return await estado.restauracionPromesa;
     }
 
-    restauracionEnCurso = true;
-    restauracionPromesa = (async () => {
+    estado.restauracionEnCurso = true;
+    estado.restauracionPromesa = (async () => {
     const timestamp = timestampIsoSeguro();
     const snapshotPath = path.join(BACKUPS_PATH, `napoli_pre_restore_${timestamp}.db`);
     let rollbackUsed = false;
@@ -346,12 +314,12 @@ async function restaurarBackupDB(rutaBackup) {
             };
         }
 
-        if (!dbService) {
+        if (!estado.dbService) {
             throw new Error('Base de datos no inicializada');
         }
 
         const snapshotResult = await medirOperacionDb('restore:snapshot_backup', () =>
-            dbService.crearBackup(snapshotPath)
+            estado.dbService.crearBackup(snapshotPath)
         );
         if (!snapshotResult.success) {
             // El snapshot pudo quedar a medias: se descarta para que nunca se use como rollback.
@@ -362,7 +330,7 @@ async function restaurarBackupDB(rutaBackup) {
 
         // Se marca antes de esperar: si el cierre falla a medias, igual se intentará reabrir.
         dbCerrada = true;
-        await dbService.closeForRestore();
+        await estado.dbService.closeForRestore();
 
         limpiarSidecarsSQLite(DB_PATH);
         const stagedRestorePath = stageRestoreFile(restoredPath, DB_PATH);
@@ -370,7 +338,7 @@ async function restaurarBackupDB(rutaBackup) {
         dbReemplazada = true;
         limpiarSidecarsSQLite(DB_PATH);
 
-        await dbService.reopenAfterRestore();
+        await estado.dbService.reopenAfterRestore();
 
         const smokeCheck = ejecutarSmokeCheckDB(DB_PATH);
         if (!smokeCheck.success) {
@@ -396,8 +364,8 @@ async function restaurarBackupDB(rutaBackup) {
         // Si el fallo ocurrió antes (p. ej. al crear el snapshot), la base sigue intacta.
         if (dbReemplazada) {
             try {
-                if (dbService) {
-                    await dbService.closeForRestore();
+                if (estado.dbService) {
+                    await estado.dbService.closeForRestore();
                 }
             } catch (closeError) {
                 console.error('Error cerrando DB tras fallo de restore:', closeError);
@@ -420,8 +388,8 @@ async function restaurarBackupDB(rutaBackup) {
 
         if (dbCerrada || dbReemplazada) {
             try {
-                if (dbService) {
-                    await dbService.reopenAfterRestore();
+                if (estado.dbService) {
+                    await estado.dbService.reopenAfterRestore();
                 }
             } catch (reopenError) {
                 const reopenMessage = `No se pudo reabrir la base tras el fallo: ${reopenError.message}`;
@@ -449,21 +417,11 @@ async function restaurarBackupDB(rutaBackup) {
             error: error.message
         };
     } finally {
-        restauracionEnCurso = false;
-        restauracionPromesa = null;
+        estado.restauracionEnCurso = false;
+        estado.restauracionPromesa = null;
     }
     })();
-    return await restauracionPromesa;
-}
-
-function eliminarArchivoParcial(rutaArchivo) {
-    try {
-        if (fs.existsSync(rutaArchivo)) {
-            fs.unlinkSync(rutaArchivo);
-        }
-    } catch (error) {
-        console.error(`No se pudo eliminar archivo parcial ${rutaArchivo}:`, error);
-    }
+    return await estado.restauracionPromesa;
 }
 
 function obtenerEstadoBackups() {
@@ -475,7 +433,7 @@ function obtenerEstadoBackups() {
         localBackups: listarBackupsLocalesDB().slice(0, 20),
         lastValidation: estado.lastValidation || null,
         lastRestore: estado.lastRestore || null,
-        dropboxConfigured: !!(dropboxManager && dropboxManager.estaConfigurado())
+        dropboxConfigured: !!(estado.dropboxManager && estado.dropboxManager.estaConfigurado())
     };
 }
 
@@ -688,22 +646,6 @@ function cargarConfiguracion() {
     }
 }
 
-function escribirJsonAtomico(ruta, datos) {
-    // Escribir a un temporal y renombrar: un corte a mitad de escritura no deja el archivo corrupto.
-    const temporal = `${ruta}.${process.pid}.tmp`;
-    fs.writeFileSync(temporal, JSON.stringify(datos, null, 2));
-    try {
-        fs.renameSync(temporal, ruta);
-    } catch (error) {
-        try {
-            fs.unlinkSync(temporal);
-        } catch (_) {
-            // noop: conservar error original.
-        }
-        throw error;
-    }
-}
-
 // Guardar configuración
 function guardarConfiguracion(config) {
     escribirJsonAtomico(CONFIG_PATH, config);
@@ -857,41 +799,9 @@ function sanitizarArticuloInput(articulo) {
     return { valid: true };
 }
 
-function operacionBloqueadaPorRestore() {
-    return restauracionEnCurso;
-}
-
-
-function respuestaBloqueoRestoreEscritura() {
-    if (!operacionBloqueadaPorRestore()) {
-        return null;
-    }
-    return { success: false, error: RESTORE_BUSY_MESSAGE, code: 'RESTORE_BUSY' };
-}
-
-function payloadErrorOperacion(error) {
-    const mensaje = error && error.message ? error.message : 'Error desconocido';
-    const payload = { success: false, error: mensaje };
-    if (error && error.code) {
-        payload.code = error.code;
-    }
-    return payload;
-}
-
-function withTimeout(promise, timeoutMs, timeoutMessage) {
-    let timeoutId;
-    const timeoutPromise = new Promise((_, reject) => {
-        timeoutId = setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs);
-    });
-
-    return Promise.race([promise, timeoutPromise]).finally(() => {
-        clearTimeout(timeoutId);
-    });
-}
-
 async function subirBackupDBConTimeout(backupPath) {
     return await withTimeout(
-        dropboxManager.subirBackupDB(backupPath),
+        estado.dropboxManager.subirBackupDB(backupPath),
         DROPBOX_UPLOAD_TIMEOUT_MS,
         'Timeout subiendo backup a Dropbox'
     );
@@ -900,8 +810,8 @@ async function subirBackupDBConTimeout(backupPath) {
 function obtenerRuntimeInfo() {
     return {
         success: true,
-        dbMode: dbService ? dbService.getMode() : 'unavailable',
-        dbWarning: dbService ? dbService.getWarning() : 'Base de datos no inicializada'
+        dbMode: estado.dbService ? estado.dbService.getMode() : 'unavailable',
+        dbWarning: estado.dbService ? estado.dbService.getWarning() : 'Base de datos no inicializada'
     };
 }
 
@@ -913,10 +823,10 @@ function iniciarReintentoWorkerDb() {
     workerRetryCount = 0;
 
     workerRetryTimer = setInterval(() => {
-        if (!dbService || restauracionEnCurso) {
+        if (!estado.dbService || estado.restauracionEnCurso) {
             return;
         }
-        if (dbService.getMode() === 'worker') {
+        if (estado.dbService.getMode() === 'worker') {
             clearInterval(workerRetryTimer);
             workerRetryTimer = null;
             workerRetryCount = 0;
@@ -930,11 +840,11 @@ function iniciarReintentoWorkerDb() {
         }
 
         workerRetryCount += 1;
-        void dbService.tryPromoteToWorker()
+        void estado.dbService.tryPromoteToWorker()
             .then((resultado) => {
                 if (resultado && resultado.success && resultado.changed) {
                     workerRetryCount = 0;
-                    logDiag('db:worker_retry', { success: true, mode: dbService.getMode() });
+                    logDiag('db:worker_retry', { success: true, mode: estado.dbService.getMode() });
                 }
             })
             .catch((error) => {
@@ -944,7 +854,7 @@ function iniciarReintentoWorkerDb() {
 }
 
 function createWindow() {
-    mainWindow = new BrowserWindow({
+    estado.mainWindow = new BrowserWindow({
         width: 1400,
         height: 900,
         icon: path.join(__dirname, 'build/icon.png'),
@@ -958,14 +868,14 @@ function createWindow() {
     });
 
     // Para desarrollo: descomentar para ver DevTools
-    // mainWindow.webContents.openDevTools();
+    // estado.mainWindow.webContents.openDevTools();
 
-    mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    estado.mainWindow.webContents.setWindowOpenHandler(({ url }) => {
         abrirUrlExternaPermitida(url);
         return { action: 'deny' };
     });
 
-    mainWindow.webContents.on('will-navigate', (event, url) => {
+    estado.mainWindow.webContents.on('will-navigate', (event, url) => {
         if (esFileUrl(url)) {
             return;
         }
@@ -974,22 +884,22 @@ function createWindow() {
         abrirUrlExternaPermitida(url);
     });
 
-    mainWindow.loadFile('src/renderer/index.html');
+    estado.mainWindow.loadFile('src/renderer/index.html');
 
-    mainWindow.on('closed', () => {
-        mainWindow = null;
+    estado.mainWindow.on('closed', () => {
+        estado.mainWindow = null;
     });
 }
 
 app.whenReady().then(async () => {
-    diagnostics = new DiagnosticsLogger({ userDataPath: USER_DATA_PATH, enabled: true });
-    diagnostics.init();
-    diagnostics.startEventLoopMonitor({ intervalMs: 250, thresholdMs: 120 });
+    estado.diagnostics = new DiagnosticsLogger({ userDataPath: USER_DATA_PATH, enabled: true });
+    estado.diagnostics.init();
+    estado.diagnostics.startEventLoopMonitor({ intervalMs: 250, thresholdMs: 120 });
 
     // Inicializar servicio de base de datos (worker con fallback legacy)
     try {
-        dbService = new DBService({ dbPath: DB_PATH, diagnostics });
-        const initResult = await dbService.init();
+        estado.dbService = new DBService({ dbPath: DB_PATH, diagnostics: estado.diagnostics });
+        const initResult = await estado.dbService.init();
         if (initResult.warning) {
             console.error(`DB init warning: ${initResult.warning}`);
         }
@@ -1012,7 +922,7 @@ app.whenReady().then(async () => {
                 note: 'Refresh token de Dropbox cargado en equipo sin cifrado local disponible.'
             }, config);
         }
-        dropboxManager = new DropboxManager(credencialesOAuth);
+        estado.dropboxManager = new DropboxManager(credencialesOAuth);
     } else if (config.dropboxToken) {
         // Token antiguo (pegado desde la App Console): sigue funcionando hasta que expire.
         const token = descifrarToken(config.dropboxToken);
@@ -1025,7 +935,7 @@ app.whenReady().then(async () => {
                     note: 'Token Dropbox cargado en equipo sin cifrado local disponible.'
                 }, config);
             }
-            dropboxManager = new DropboxManager(token);
+            estado.dropboxManager = new DropboxManager(token);
         }
     }
 
@@ -1078,12 +988,12 @@ app.on('before-quit', (event) => {
                             clearInterval(workerRetryTimer);
                             workerRetryTimer = null;
                         }
-                        if (diagnostics) {
-                            diagnostics.stopEventLoopMonitor();
+                        if (estado.diagnostics) {
+                            estado.diagnostics.stopEventLoopMonitor();
                         }
-                        if (dbService) {
-                            await dbService.closeAll();
-                            dbService = null;
+                        if (estado.dbService) {
+                            await estado.dbService.closeAll();
+                            estado.dbService = null;
                         }
                     })
                     .catch((closeError) => {
@@ -1118,11 +1028,11 @@ ipcMain.handle('app:runtimeInfo', async () => {
 ipcMain.handle('db:insertar', async (_event, articulo) => {
     const bloqueo = respuestaBloqueoRestoreEscritura();
     if (bloqueo) return bloqueo;
-    if (!dbService) return { success: false, error: 'Base de datos no inicializada' };
+    if (!estado.dbService) return { success: false, error: 'Base de datos no inicializada' };
     const validacion = sanitizarArticuloInput(articulo);
     if (!validacion.valid) return { success: false, error: validacion.error };
     try {
-        return await medirOperacionDb('db:insertar', () => dbService.insertar(articulo));
+        return await medirOperacionDb('db:insertar', () => estado.dbService.insertar(articulo));
     } catch (error) {
         return payloadErrorOperacion(error);
     }
@@ -1131,9 +1041,9 @@ ipcMain.handle('db:insertar', async (_event, articulo) => {
 ipcMain.handle('db:obtenerTodos', async () => {
     const bloqueo = respuestaBloqueoRestoreEscritura();
     if (bloqueo) return bloqueo;
-    if (!dbService) return { success: false, error: 'Base de datos no inicializada' };
+    if (!estado.dbService) return { success: false, error: 'Base de datos no inicializada' };
     try {
-        return await medirOperacionDb('db:obtenerTodos', () => dbService.obtenerTodos());
+        return await medirOperacionDb('db:obtenerTodos', () => estado.dbService.obtenerTodos());
     } catch (error) {
         return payloadErrorOperacion(error);
     }
@@ -1142,9 +1052,9 @@ ipcMain.handle('db:obtenerTodos', async () => {
 ipcMain.handle('db:obtenerPorId', async (_event, id) => {
     const bloqueo = respuestaBloqueoRestoreEscritura();
     if (bloqueo) return bloqueo;
-    if (!dbService) return { success: false, error: 'Base de datos no inicializada' };
+    if (!estado.dbService) return { success: false, error: 'Base de datos no inicializada' };
     try {
-        return await medirOperacionDb('db:obtenerPorId', () => dbService.obtenerPorId(id));
+        return await medirOperacionDb('db:obtenerPorId', () => estado.dbService.obtenerPorId(id));
     } catch (error) {
         return payloadErrorOperacion(error);
     }
@@ -1153,9 +1063,9 @@ ipcMain.handle('db:obtenerPorId', async (_event, id) => {
 ipcMain.handle('db:actualizarEstado', async (_event, id, nuevoEstado) => {
     const bloqueo = respuestaBloqueoRestoreEscritura();
     if (bloqueo) return bloqueo;
-    if (!dbService) return { success: false, error: 'Base de datos no inicializada' };
+    if (!estado.dbService) return { success: false, error: 'Base de datos no inicializada' };
     try {
-        return await medirOperacionDb('db:actualizarEstado', () => dbService.actualizarEstado(id, nuevoEstado));
+        return await medirOperacionDb('db:actualizarEstado', () => estado.dbService.actualizarEstado(id, nuevoEstado));
     } catch (error) {
         return payloadErrorOperacion(error);
     }
@@ -1164,9 +1074,9 @@ ipcMain.handle('db:actualizarEstado', async (_event, id, nuevoEstado) => {
 ipcMain.handle('db:eliminar', async (_event, id) => {
     const bloqueo = respuestaBloqueoRestoreEscritura();
     if (bloqueo) return bloqueo;
-    if (!dbService) return { success: false, error: 'Base de datos no inicializada' };
+    if (!estado.dbService) return { success: false, error: 'Base de datos no inicializada' };
     try {
-        return await medirOperacionDb('db:eliminar', () => dbService.eliminar(id));
+        return await medirOperacionDb('db:eliminar', () => estado.dbService.eliminar(id));
     } catch (error) {
         return payloadErrorOperacion(error);
     }
@@ -1175,9 +1085,9 @@ ipcMain.handle('db:eliminar', async (_event, id) => {
 ipcMain.handle('db:buscar', async (_event, termino) => {
     const bloqueo = respuestaBloqueoRestoreEscritura();
     if (bloqueo) return bloqueo;
-    if (!dbService) return { success: false, error: 'Base de datos no inicializada' };
+    if (!estado.dbService) return { success: false, error: 'Base de datos no inicializada' };
     try {
-        return await medirOperacionDb('db:buscar', () => dbService.buscar(termino));
+        return await medirOperacionDb('db:buscar', () => estado.dbService.buscar(termino));
     } catch (error) {
         return payloadErrorOperacion(error);
     }
@@ -1186,9 +1096,9 @@ ipcMain.handle('db:buscar', async (_event, termino) => {
 ipcMain.handle('db:obtenerEstadisticas', async () => {
     const bloqueo = respuestaBloqueoRestoreEscritura();
     if (bloqueo) return bloqueo;
-    if (!dbService) return { success: false, error: 'Base de datos no inicializada' };
+    if (!estado.dbService) return { success: false, error: 'Base de datos no inicializada' };
     try {
-        return await medirOperacionDb('db:obtenerEstadisticas', () => dbService.obtenerEstadisticas());
+        return await medirOperacionDb('db:obtenerEstadisticas', () => estado.dbService.obtenerEstadisticas());
     } catch (error) {
         return payloadErrorOperacion(error);
     }
@@ -1197,9 +1107,9 @@ ipcMain.handle('db:obtenerEstadisticas', async () => {
 ipcMain.handle('db:migrarDesdeLocalStorage', async (_event, datosJSON) => {
     const bloqueo = respuestaBloqueoRestoreEscritura();
     if (bloqueo) return bloqueo;
-    if (!dbService) return { success: false, error: 'Base de datos no inicializada' };
+    if (!estado.dbService) return { success: false, error: 'Base de datos no inicializada' };
     try {
-        return await medirOperacionDb('db:migrarDesdeLocalStorage', () => dbService.migrarDesdeLocalStorage(datosJSON));
+        return await medirOperacionDb('db:migrarDesdeLocalStorage', () => estado.dbService.migrarDesdeLocalStorage(datosJSON));
     } catch (error) {
         return payloadErrorOperacion(error);
     }
@@ -1212,7 +1122,7 @@ ipcMain.handle('db:migrarDesdeLocalStorage', async (_event, datosJSON) => {
 ipcMain.handle('pago:registrarAbono', async (_event, articuloId, monto, metodoPago, observaciones) => {
     const bloqueo = respuestaBloqueoRestoreEscritura();
     if (bloqueo) return bloqueo;
-    if (!dbService) return { success: false, error: 'Base de datos no inicializada' };
+    if (!estado.dbService) return { success: false, error: 'Base de datos no inicializada' };
     if (typeof metodoPago === 'string' && metodoPago.length > LIMITE_STRING_CAMPO) {
         return { success: false, error: `Método de pago excede el límite de ${LIMITE_STRING_CAMPO} caracteres` };
     }
@@ -1221,7 +1131,7 @@ ipcMain.handle('pago:registrarAbono', async (_event, articuloId, monto, metodoPa
     }
     try {
         return await medirOperacionDb('pago:registrarAbono', () =>
-            dbService.registrarAbono(articuloId, monto, metodoPago, observaciones)
+            estado.dbService.registrarAbono(articuloId, monto, metodoPago, observaciones)
         );
     } catch (error) {
         return payloadErrorOperacion(error);
@@ -1231,9 +1141,9 @@ ipcMain.handle('pago:registrarAbono', async (_event, articuloId, monto, metodoPa
 ipcMain.handle('pago:obtenerAbonos', async (_event, articuloId) => {
     const bloqueo = respuestaBloqueoRestoreEscritura();
     if (bloqueo) return bloqueo;
-    if (!dbService) return { success: false, error: 'Base de datos no inicializada' };
+    if (!estado.dbService) return { success: false, error: 'Base de datos no inicializada' };
     try {
-        return await medirOperacionDb('pago:obtenerAbonos', () => dbService.obtenerAbonosArticulo(articuloId));
+        return await medirOperacionDb('pago:obtenerAbonos', () => estado.dbService.obtenerAbonosArticulo(articuloId));
     } catch (error) {
         return payloadErrorOperacion(error);
     }
@@ -1242,10 +1152,10 @@ ipcMain.handle('pago:obtenerAbonos', async (_event, articuloId) => {
 ipcMain.handle('pago:actualizarValor', async (_event, articuloId, nuevoValor) => {
     const bloqueo = respuestaBloqueoRestoreEscritura();
     if (bloqueo) return bloqueo;
-    if (!dbService) return { success: false, error: 'Base de datos no inicializada' };
+    if (!estado.dbService) return { success: false, error: 'Base de datos no inicializada' };
     try {
         return await medirOperacionDb('pago:actualizarValor', () =>
-            dbService.actualizarValorTotal(articuloId, nuevoValor)
+            estado.dbService.actualizarValorTotal(articuloId, nuevoValor)
         );
     } catch (error) {
         return payloadErrorOperacion(error);
@@ -1290,7 +1200,7 @@ ipcMain.handle('backup:abrirCarpeta', async () => {
 
 ipcMain.handle('backup:seleccionarArchivoDB', async () => {
     try {
-        const targetWindow = mainWindow && !mainWindow.isDestroyed() ? mainWindow : undefined;
+        const targetWindow = estado.mainWindow && !estado.mainWindow.isDestroyed() ? estado.mainWindow : undefined;
         const result = await dialog.showOpenDialog(targetWindow, {
             title: 'Seleccionar backup de base de datos',
             defaultPath: BACKUPS_PATH,
@@ -1335,18 +1245,18 @@ ipcMain.handle('backup:estado', async () => {
 
 async function crearBackupInterno({ prefijo = 'napoli_backup_', opLabel = 'backup:crear', estadoKey = 'lastAutomaticBackup', exigirDropbox = false, limpiar = false } = {}) {
     try {
-        if (restauracionEnCurso) {
+        if (estado.restauracionEnCurso) {
             return { success: false, error: 'Restauración en curso. Intente nuevamente al terminar.' };
         }
 
         const timestamp = timestampIsoSeguro();
         const backupPath = path.join(BACKUPS_PATH, `${prefijo}${timestamp}.db`);
 
-        if (!dbService) {
+        if (!estado.dbService) {
             throw new Error('Base de datos no inicializada');
         }
 
-        const backupDB = await medirOperacionDb(opLabel, () => dbService.crearBackup(backupPath));
+        const backupDB = await medirOperacionDb(opLabel, () => estado.dbService.crearBackup(backupPath));
         if (!backupDB.success) {
             return backupDB;
         }
@@ -1364,7 +1274,7 @@ async function crearBackupInterno({ prefijo = 'napoli_backup_', opLabel = 'backu
         });
 
         // Subir a Dropbox si está configurado
-        if (dropboxManager && dropboxManager.estaConfigurado()) {
+        if (estado.dropboxManager && estado.dropboxManager.estaConfigurado()) {
             let subida;
             try {
                 subida = await subirBackupDBConTimeout(backupPath);
@@ -1422,22 +1332,22 @@ async function exportarJSON() {
         const bloqueo = respuestaBloqueoRestoreEscritura();
         if (bloqueo) return bloqueo;
 
-        if (!dbService) {
+        if (!estado.dbService) {
             throw new Error('Base de datos no inicializada');
         }
 
         const timestamp = timestampIsoSeguro();
         const jsonPath = path.join(BACKUPS_PATH, `napoli_export_${timestamp}.json`);
 
-        const datos = await medirOperacionDb('backup:exportarJSON:obtenerTodos', () => dbService.obtenerTodos());
+        const datos = await medirOperacionDb('backup:exportarJSON:obtenerTodos', () => estado.dbService.obtenerTodos());
         fs.writeFileSync(jsonPath, JSON.stringify(datos, null, 2));
 
         console.log('✅ JSON exportado:', jsonPath);
 
         // Subir a Dropbox si está configurado
-        if (dropboxManager && dropboxManager.estaConfigurado()) {
+        if (estado.dropboxManager && estado.dropboxManager.estaConfigurado()) {
             try {
-                await dropboxManager.subirBackupJSON(jsonPath);
+                await estado.dropboxManager.subirBackupJSON(jsonPath);
             } catch (error) {
                 console.error('JSON exportado localmente, pero falló subida a Dropbox:', error.message);
             }
@@ -1455,7 +1365,7 @@ async function exportarExcel() {
         const bloqueo = respuestaBloqueoRestoreEscritura();
         if (bloqueo) return bloqueo;
 
-        if (!dbService) {
+        if (!estado.dbService) {
             throw new Error('Base de datos no inicializada');
         }
 
@@ -1530,7 +1440,7 @@ async function exportarExcel() {
         });
 
         // Obtener datos
-        const datos = await medirOperacionDb('backup:exportarExcel:obtenerTodos', () => dbService.obtenerTodos());
+        const datos = await medirOperacionDb('backup:exportarExcel:obtenerTodos', () => estado.dbService.obtenerTodos());
 
         // Agregar filas
         datos.forEach((articulo, index) => {
@@ -1567,8 +1477,8 @@ async function exportarExcel() {
         console.log('✅ Excel exportado:', excelPath);
 
         // Subir a Dropbox si está configurado
-        if (dropboxManager && dropboxManager.estaConfigurado()) {
-            const subida = await dropboxManager.subirArchivo(excelPath, `/NapoliReparadora/Exports/${path.basename(excelPath)}`);
+        if (estado.dropboxManager && estado.dropboxManager.estaConfigurado()) {
+            const subida = await estado.dropboxManager.subirArchivo(excelPath, `/NapoliReparadora/Exports/${path.basename(excelPath)}`);
             if (!subida.success) {
                 return {
                     success: true,
@@ -1588,7 +1498,7 @@ async function exportarExcel() {
 
 async function subirBackupDropboxInmediato() {
     try {
-        if (!dropboxManager || !dropboxManager.estaConfigurado()) {
+        if (!estado.dropboxManager || !estado.dropboxManager.estaConfigurado()) {
             return { success: false, error: 'Dropbox no configurado' };
         }
 
@@ -1685,7 +1595,7 @@ ipcMain.handle('dropbox:completarAutorizacion', async (_event, codigo) => {
         }
 
         autorizacionDropboxPendiente = null;
-        dropboxManager = candidato;
+        estado.dropboxManager = candidato;
 
         const config = cargarConfiguracion();
         config.dropboxAuth = {
@@ -1720,25 +1630,25 @@ ipcMain.handle('dropbox:completarAutorizacion', async (_event, codigo) => {
 });
 
 ipcMain.handle('dropbox:verificar', async () => {
-    if (!dropboxManager || !dropboxManager.estaConfigurado()) {
+    if (!estado.dropboxManager || !estado.dropboxManager.estaConfigurado()) {
         return { success: false, error: 'Dropbox no configurado' };
     }
     try {
-        const resultado = await dropboxManager.verificarConexion();
+        const resultado = await estado.dropboxManager.verificarConexion();
         // El token antiguo deja de funcionar al expirar: avisar que hay que reconectar con el flujo nuevo.
-        return { ...resultado, tokenHeredado: Boolean(dropboxManager.usaTokenHeredado) };
+        return { ...resultado, tokenHeredado: Boolean(estado.dropboxManager.usaTokenHeredado) };
     } catch (error) {
         return payloadErrorOperacion(error);
     }
 });
 
 ipcMain.handle('dropbox:estaConfigurado', async () => {
-    return dropboxManager && dropboxManager.estaConfigurado();
+    return estado.dropboxManager && estado.dropboxManager.estaConfigurado();
 });
 
 ipcMain.handle('dropbox:desconectar', async () => {
     try {
-        dropboxManager = null;
+        estado.dropboxManager = null;
         autorizacionDropboxPendiente = null;
         const config = cargarConfiguracion();
         delete config.dropboxToken;
@@ -1751,11 +1661,11 @@ ipcMain.handle('dropbox:desconectar', async () => {
 });
 
 ipcMain.handle('dropbox:listarBackups', async () => {
-    if (!dropboxManager || !dropboxManager.estaConfigurado()) {
+    if (!estado.dropboxManager || !estado.dropboxManager.estaConfigurado()) {
         return { success: false, error: 'Dropbox no configurado' };
     }
     try {
-        return await dropboxManager.listarBackups();
+        return await estado.dropboxManager.listarBackups();
     } catch (error) {
         return payloadErrorOperacion(error);
     }
@@ -1803,7 +1713,7 @@ ipcMain.handle('config:guardar', async (_event, nuevaConfig) => {
 // ============================================
 
 ipcMain.handle('imprimir', async (_event, opciones = {}) => {
-    if (!mainWindow) {
+    if (!estado.mainWindow) {
         return { success: false, error: 'Ventana principal no disponible' };
     }
 
@@ -1824,7 +1734,7 @@ ipcMain.handle('imprimir', async (_event, opciones = {}) => {
         };
 
         await new Promise((resolve, reject) => {
-            mainWindow.webContents.print(
+            estado.mainWindow.webContents.print(
                 printOptions,
                 (success, failureReason) => {
                     if (success) {
