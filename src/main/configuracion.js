@@ -321,7 +321,6 @@ function sanitizarConfigImpresora(printerConfig = {}) {
 }
 
 module.exports = {
-    PRINTER_CONFIG_DEFAULTS,
     cargarConfiguracion,
     guardarConfiguracion,
     registrarDecisionOperativa,

@@ -93,13 +93,11 @@ function withTimeout(promise, timeoutMs, timeoutMessage) {
 }
 
 module.exports = {
-    RESTORE_BUSY_MESSAGE,
     logDiag,
     medirOperacionDb,
     timestampIsoSeguro,
     escribirJsonAtomico,
     eliminarArchivoParcial,
-    operacionBloqueadaPorRestore,
     respuestaBloqueoRestoreEscritura,
     payloadErrorOperacion,
     withTimeout

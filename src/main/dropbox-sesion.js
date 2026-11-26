@@ -63,7 +63,6 @@ module.exports = {
     WARNING_TOKEN_NO_CIFRADO,
     INSECURE_STORAGE_RESPONSE_CODE,
     OP_DECISION_DROPBOX_TOKEN_SIN_CIFRADO,
-    leerCredencialesDropboxOAuth,
     inicializarDropboxDesdeConfiguracion,
     subirBackupDBConTimeout
 };

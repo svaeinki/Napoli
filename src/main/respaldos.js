@@ -260,15 +260,11 @@ function limpiarBackupsAntiguos() {
 }
 
 module.exports = {
-    cargarEstadoBackups,
     registrarEstadoBackups,
-    listarBackupsLocalesDB,
-    obtenerUltimoBackupLocal,
     obtenerEstadoBackups,
     esRutaPermitidaParaBackup,
     registrarRutaAprobadaPorDialogo,
     crearBackupAutomatico,
     crearBackupManual,
-    subirBackupDropboxInmediato,
-    limpiarBackupsAntiguos
+    subirBackupDropboxInmediato
 };

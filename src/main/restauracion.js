@@ -311,9 +311,7 @@ async function restaurarBackupDB(rutaBackup) {
 }
 
 module.exports = {
-    REQUIRED_BACKUP_TABLES,
     validarBackupDBInterno,
-    ejecutarSmokeCheckDB,
     construirLogValidacion,
     restaurarBackupDB
 };
