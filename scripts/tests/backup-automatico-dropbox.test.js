@@ -29,7 +29,7 @@ async function escenario(t, modo) {
     const hace40Dias = new Date(Date.now() - 40 * 24 * 60 * 60 * 1000);
     fs.utimesSync(antiguo, hace40Dias, hace40Dias);
 
-    const resultado = await main.sandbox.crearBackupAutomatico();
+    const resultado = await main.modulo('respaldos').crearBackupAutomatico();
     const estado = JSON.parse(fs.readFileSync(path.join(main.userData, 'backup-status.json'), 'utf8'));
     return { main, antiguo, resultado, estado };
 }
