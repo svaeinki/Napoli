@@ -6,7 +6,7 @@ const {
     formatearFechaChileParaExport,
     normalizarFechaIngresoIso,
     parseFechaChileInput
-} = require('../../src/chile-date');
+} = require('../../src/main/chile-date');
 
 test('parsea formato legado con p. m. y conserva hora Chile al normalizar a ISO', () => {
     const iso = normalizarFechaIngresoIso('23-02-2026, 10:46:19 p. m.', { fallbackNow: false });

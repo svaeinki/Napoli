@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const DatabaseManager = require('../../src/database');
+const DatabaseManager = require('../../src/main/database');
 
 function esErrorNativoBetterSqlite(error) {
     return Boolean(

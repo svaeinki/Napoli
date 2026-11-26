@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { DiagnosticsLogger } = require('../../src/diagnostics');
+const { DiagnosticsLogger } = require('../../src/main/diagnostics');
 
 test('DiagnosticsLogger escribe archivo de trazas y permite iniciar/detener monitor', async () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'napoli-diag-'));

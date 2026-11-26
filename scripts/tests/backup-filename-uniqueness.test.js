@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createUniqueTimestampGenerator } = require('../../src/backup-filename');
+const { createUniqueTimestampGenerator } = require('../../src/main/backup-filename');
 
 test('genera nombres únicos aun con el mismo instante', () => {
     const fixedDate = new Date('2026-02-24T12:34:56.789Z');

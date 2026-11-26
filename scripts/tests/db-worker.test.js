@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const DBService = require('../../src/db-service');
+const DBService = require('../../src/main/db-service');
 
 function crearArticuloBase() {
     return {

@@ -3,8 +3,8 @@ const assert = require('node:assert/strict');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const DatabaseManager = require('../../src/database');
-const { normalizarFechaIsoChile } = require('../../src/chile-date');
+const DatabaseManager = require('../../src/main/database');
+const { normalizarFechaIsoChile } = require('../../src/main/chile-date');
 
 function esErrorNativoBetterSqlite(error) {
     return Boolean(

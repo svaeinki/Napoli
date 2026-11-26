@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const DropboxManager = require('../../src/dropbox');
+const DropboxManager = require('../../src/main/dropbox');
 const { cargarMainProcess } = require('./helpers/main-process-harness');
 
 const { iniciarAutorizacionPKCE, completarAutorizacionPKCE, describirErrorDropbox } = DropboxManager;

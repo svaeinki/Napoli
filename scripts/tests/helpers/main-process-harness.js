@@ -99,11 +99,11 @@ function cargarMainProcess({ dropboxFactory = null, configInicial = null, encryp
     const mocks = {
         electron: electronMock,
         'better-sqlite3': FakeBetterSqlite,
-        './src/db-service': function DBServiceMock() { return dbService; },
-        './src/dropbox': dropboxFactory || function DropboxMock() {
+        './src/main/db-service': function DBServiceMock() { return dbService; },
+        './src/main/dropbox': dropboxFactory || function DropboxMock() {
             this.estaConfigurado = () => true;
         },
-        './src/diagnostics': {
+        './src/main/diagnostics': {
             DiagnosticsLogger: class {
                 init() {}
                 log() {}

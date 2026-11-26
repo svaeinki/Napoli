@@ -8,7 +8,7 @@ const {
     limpiarSidecarsSQLite,
     replaceFileAtomically,
     stageRestoreFile
-} = require('../../src/sqlite-restore-utils');
+} = require('../../src/main/sqlite-restore-utils');
 
 test('restore utils reemplazan DB y limpian sidecars WAL/SHM', () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'napoli-restore-test-'));

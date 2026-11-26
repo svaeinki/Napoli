@@ -2,18 +2,18 @@ const { app, BrowserWindow, ipcMain, shell, safeStorage, dialog } = require('ele
 const path = require('path');
 const fs = require('fs');
 const BetterSqlite = require('better-sqlite3');
-const DBService = require('./src/db-service');
-const DropboxManager = require('./src/dropbox');
+const DBService = require('./src/main/db-service');
+const DropboxManager = require('./src/main/dropbox');
 const { iniciarAutorizacionPKCE, completarAutorizacionPKCE } = DropboxManager;
-const { DiagnosticsLogger } = require('./src/diagnostics');
-const { formatearFechaChileParaExport } = require('./src/chile-date');
-const { esUrlExternaPermitida, esFileUrl } = require('./src/navigation-security');
-const { createUniqueTimestampGenerator } = require('./src/backup-filename');
+const { DiagnosticsLogger } = require('./src/main/diagnostics');
+const { formatearFechaChileParaExport } = require('./src/main/chile-date');
+const { esUrlExternaPermitida, esFileUrl } = require('./src/main/navigation-security');
+const { createUniqueTimestampGenerator } = require('./src/main/backup-filename');
 const {
     limpiarSidecarsSQLite,
     replaceFileAtomically,
     stageRestoreFile
-} = require('./src/sqlite-restore-utils');
+} = require('./src/main/sqlite-restore-utils');
 
 let mainWindow;
 let dbService;

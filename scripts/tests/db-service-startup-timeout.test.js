@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('path');
-const DBService = require('../../src/db-service');
+const DBService = require('../../src/main/db-service');
 
 test('un ready tardío tras el timeout de arranque no deja un worker terminado como activo', async (t) => {
     const service = new DBService({ dbPath: 'fake.db', workerStartupTimeoutMs: 100 });

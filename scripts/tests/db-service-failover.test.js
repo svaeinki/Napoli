@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const DBService = require('../../src/db-service');
+const DBService = require('../../src/main/db-service');
 
 function crearErrorTimeout() {
     const error = new Error('Timeout simulando worker DB');

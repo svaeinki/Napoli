@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const DBService = require('../../src/db-service');
+const DBService = require('../../src/main/db-service');
 
 test('lectura en legacy propaga error explícito (sin defaults silenciosos)', async () => {
     const service = new DBService({ dbPath: 'fake.db' });

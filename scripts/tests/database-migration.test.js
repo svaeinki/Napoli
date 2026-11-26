@@ -5,7 +5,7 @@ const path = require('path');
 const vm = require('vm');
 
 function cargarDatabaseManagerConDbFalsa(estado) {
-    const codigo = fs.readFileSync(path.join(__dirname, '../../src/database.js'), 'utf8');
+    const codigo = fs.readFileSync(path.join(__dirname, '../../src/main/database.js'), 'utf8');
 
     class FakeDatabase {
         constructor(dbPath) {
@@ -74,7 +74,7 @@ function cargarDatabaseManagerConDbFalsa(estado) {
                 return path;
             }
             if (moduleName === './chile-date') {
-                return require('../../src/chile-date');
+                return require('../../src/main/chile-date');
             }
             throw new Error(`Módulo no esperado en test: ${moduleName}`);
         }

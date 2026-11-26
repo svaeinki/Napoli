@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { esFileUrl, esUrlExternaPermitida } = require('../../src/navigation-security');
+const { esFileUrl, esUrlExternaPermitida } = require('../../src/main/navigation-security');
 
 test('esUrlExternaPermitida permite solo https en dominios allowlist', () => {
     assert.equal(esUrlExternaPermitida('https://www.dropbox.com/developers/apps'), true);
