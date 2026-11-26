@@ -1,116 +1,137 @@
-# Changelog
+# Registro de cambios
 
-All notable changes to Napoli are documented in this file.
+Todos los cambios relevantes de Napoli se documentan en este archivo.
 
-The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+El formato se basa a grandes rasgos en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/),
+y el proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
 
-## [Unreleased]
+## [Sin publicar]
 
-### Added
-- Bundled the **Archivo** variable font (`src/assets/fonts/`, SIL OFL 1.1) — loaded
-  locally via `@font-face`, so the CSP is unchanged and it works offline.
+### Agregado
+- Se incluye la fuente variable **Archivo** (`src/renderer/assets/fonts/`, SIL OFL 1.1),
+  cargada localmente con `@font-face`, así que la CSP no cambia y funciona sin conexión.
 
-### Changed
-- **Visual redesign of the whole renderer** (styles and markup only — no changes to
-  behavior, texts, IDs, `onclick` handlers, JS, backend or data):
-  - New design tokens in `styles.css` for light and dark themes: neutral stone
-    background, white surfaces, ink text, and the Napoli burgundy reserved for the
-    primary action and the active tab.
-  - Typography: Archivo condensed for page titles, tabs and figures; normal width for
-    forms and tables; tabular numerals for amounts, RUTs and dates.
-  - "Pespunte" (stitch) motif: the logo sits on a stitched label, the active tab has a
-    stitched leather strip, and dashed stitch lines separate sections and modal headers.
-  - Compact header bar (logo cropped to fit, settings/theme as icon buttons) and
-    left-aligned underline tabs.
-  - Buttons: filled burgundy primary, outlined secondary/info, tinted
-    success/warning/danger that turn solid on hover; loading and disabled states kept.
-  - Forms: 40 px fields with a visible focus ring, custom select chevron, clearer
-    RUT valid/invalid and inline error states.
-  - Inventory/search tables: light sticky header, pill status badges with a dot,
-    colored side stripe on alert rows, no-wrap RUT/date columns and a sticky
-    **Actions** column on the right when the table scrolls horizontally.
-    "En Bodega" badge is now blue (was amber, same as "Abonado").
-  - Inventory stats shown as one divided panel; Backups tab laid out in two columns
-    (single column on narrow windows).
-  - Modals (payments, confirmation, settings, ticket preview) restyled; the settings
-    modal's inline `<style>` moved into `styles.css`.
-  - Template inline styles moved to classes (only JS-controlled `display` toggles remain).
-  - Respects `prefers-reduced-motion`.
-- Thermal ticket printing and its preview are intentionally untouched: new heading and
-  text rules are scoped to the app UI so `ticket.css` output does not change.
-- Package manager migrated to Yarn 4 (via Corepack, `nodeLinker: node-modules`);
-  CI now installs with `yarn install --immutable`.
-- Spanish README is now the primary `README.md`; English moved to `README.en.md`.
+### Cambiado
+- **Reorganización del código por proceso** (sin cambios de comportamiento):
+  - El código quedó separado en `src/main/` (proceso principal), `src/preload/` y
+    `src/renderer/` (interfaz).
+  - `main.js` (~1.850 líneas) se dividió en módulos por tema dentro de `src/main/`:
+    ciclo de vida, ventana, rutas, estado compartido, utilidades, configuración,
+    respaldos, restauración, exportaciones y sesión de Dropbox.
+  - Los handlers IPC quedaron en `src/main/ipc/`, uno por área.
+  - `main.js` quedó como un punto de entrada corto.
+  - El harness de tests ahora carga cada módulo del proceso principal dentro del
+    sandbox `vm`, con una caché propia por test.
+- **Rediseño visual de toda la interfaz** (solo estilos y marcado: sin cambios de
+  comportamiento, textos, IDs, handlers `onclick`, JS, backend ni datos):
+  - Nuevos tokens de diseño en `styles.css` para los temas claro y oscuro: fondo piedra
+    neutro, superficies blancas, texto tinta, y el burdeos de Napoli reservado para la
+    acción principal y la pestaña activa.
+  - Tipografía: Archivo condensada para títulos de página, pestañas y cifras; ancho
+    normal para formularios y tablas; números tabulares para montos, RUT y fechas.
+  - Motivo de "pespunte": el logo va sobre una etiqueta pespunteada, la pestaña activa
+    tiene una tira de cuero con costura, y líneas de puntada separan secciones y
+    encabezados de modales.
+  - Barra de encabezado compacta (logo recortado, configuración y tema como botones de
+    ícono) y pestañas alineadas a la izquierda con subrayado.
+  - Botones: principal burdeos relleno, secundario/info con contorno, y
+    éxito/advertencia/peligro tintados que se vuelven sólidos al pasar el cursor; se
+    mantienen los estados de carga y deshabilitado.
+  - Formularios: campos de 40 px con anillo de foco visible, flecha de select
+    personalizada, estados más claros de RUT válido/inválido y de error en línea.
+  - Tablas de inventario y búsqueda: encabezado claro fijo, insignias de estado tipo
+    píldora con punto, franja lateral de color en filas de alerta, columnas de RUT y
+    fecha sin salto de línea, y columna **Acciones** fija a la derecha cuando la tabla
+    se desplaza horizontalmente. La insignia "En Bodega" ahora es azul (antes era ámbar,
+    igual que "Abonado").
+  - Estadísticas del inventario en un solo panel dividido; pestaña Backups en dos
+    columnas (una sola en ventanas angostas).
+  - Modales (pagos, confirmación, configuración, vista previa del ticket) con estilo
+    nuevo; el `<style>` en línea del modal de configuración pasó a `styles.css`.
+  - Los estilos en línea de los templates pasaron a clases (solo quedan los cambios de
+    `display` controlados por JS).
+  - Respeta `prefers-reduced-motion`.
+- La impresión del ticket térmico y su vista previa no se tocaron a propósito: las
+  nuevas reglas de títulos y texto se limitan a la interfaz, así que el resultado de
+  `ticket.css` no cambia.
+- El gestor de paquetes migró a Yarn 4 (mediante Corepack, `nodeLinker: node-modules`);
+  la CI ahora instala con `yarn install --immutable`.
+- El README en español ahora es el principal (`README.md`); el inglés pasó a `README.en.md`.
 
-### Security
-- Bumped build-time `node-gyp` to v11 (patched `tar`) and forced `image-size` v2,
-  clearing all high/critical findings from `check:audit`. `excel4node` is patched
-  to use the `image-size` v2 API.
+### Seguridad
+- Se subió `node-gyp` (usado al compilar) a v11 (con `tar` parchado) y se forzó
+  `image-size` v2, eliminando todos los hallazgos altos y críticos de `check:audit`.
+  `excel4node` está parchado para usar la API de `image-size` v2.
 
 ## [2.0.9] — 2026
 
-### Changed
-- Code review cleanup and refactoring across the database, backup, and IPC layers.
-- Hardened release checks and tightened the dependency security workflow.
+### Cambiado
+- Limpieza y refactorización de las capas de base de datos, backups e IPC tras una
+  revisión de código.
+- Controles de release más estrictos y flujo de seguridad de dependencias reforzado.
 
-### Fixed
-- Critical bug and security fixes rolled up prior to the production deployment.
-- 58 mm thermal ticket: corrected top primer size and clipping compensation.
+### Corregido
+- Correcciones críticas de errores y de seguridad reunidas antes del despliegue en
+  producción.
+- Ticket térmico de 58 mm: se corrigió el tamaño del margen superior inicial y la
+  compensación del recorte.
 
 ## [2.0.8] — 2026
 
-### Changed
-- Hardened database layer for production stability — added worker-thread failover,
-  explicit transaction boundaries, and IPC short-circuiting during restore.
+### Cambiado
+- Capa de base de datos reforzada para estabilidad en producción: respaldo del worker
+  thread, límites de transacción explícitos y corte inmediato de los IPC durante una
+  restauración.
 
 ## [2.0.6] — 2026
 
-### Changed
-- CI: switched to a supported macOS runner for the release workflow.
+### Cambiado
+- CI: se cambió a un runner de macOS soportado para el flujo de release.
 
 ## [2.0.5] — 2026
 
-### Changed
-- CI: release pipeline now publishes only installer artifacts (`.exe`, `.dmg`,
-  `.AppImage`) — no auto-update channel.
+### Cambiado
+- CI: el pipeline de release ahora publica solo los instaladores (`.exe`, `.dmg`,
+  `.AppImage`), sin canal de actualización automática.
 
 ## [2.0.4] — 2026
 
-### Fixed
-- Calibrated 58 mm thermal ticket width so narrow rolls print cleanly.
+### Corregido
+- Se calibró el ancho del ticket térmico de 58 mm para que los rollos angostos se
+  impriman bien.
 
 ## [2.0.3] — 2025
 
-### Added
-- Ticket preview modal.
-- Search by article ID (in addition to RUT, name, and location).
-- Application icons for all platforms.
-- `rebuild` script and OS-specific installation instructions in the README.
-- Configurable ticket generation with QR code support.
+### Agregado
+- Modal de vista previa del ticket.
+- Búsqueda por ID de artículo (además de RUT, nombre y ubicación).
+- Íconos de la aplicación para todas las plataformas.
+- Script `rebuild` e instrucciones de instalación por sistema operativo en el README.
+- Generación configurable de tickets con soporte de código QR.
 
-### Changed
-- UI palette revamped for light and dark themes; improved dark-mode logo contrast.
-- Primary color scheme switched to red; added logo to the header.
-- Flattened project structure — removed the `zapateria-bodega/` subdirectory.
-- Upgraded `better-sqlite3` to v12; added `node-gyp` override.
-- Explicitly configured x64 architecture for the Windows NSIS target.
+### Cambiado
+- Paleta de la interfaz renovada para los temas claro y oscuro; mejor contraste del
+  logo en modo oscuro.
+- Color principal cambiado a rojo; se agregó el logo al encabezado.
+- Estructura del proyecto aplanada: se eliminó el subdirectorio `zapateria-bodega/`.
+- `better-sqlite3` actualizado a v12; se agregó un override de `node-gyp`.
+- Arquitectura x64 configurada explícitamente para el instalador NSIS de Windows.
 
-### Security
-- Hardening and stability fixes across the codebase (HTML escaping for tickets,
-  prepared statements verified throughout).
+### Seguridad
+- Correcciones de robustez y estabilidad en todo el código (escape de HTML en los
+  tickets, sentencias preparadas verificadas en todas partes).
 
 ## [2.0.0] — 2025
 
-### Added
-- Initial SQLite migration with transactional writes and robust backups.
-- Dropbox integration for optional cloud backup sync.
-- Payment and installment (abono) system with full history.
-- Thermal ticket printing (58 mm / 80 mm) with configurable font profiles.
-- Chilean RUT validation (modulo-11 verifier digit).
-- Dark theme.
+### Agregado
+- Migración inicial a SQLite con escrituras transaccionales y backups robustos.
+- Integración con Dropbox para sincronizar backups en la nube (opcional).
+- Sistema de pagos y abonos con historial completo.
+- Impresión de tickets térmicos (58 mm / 80 mm) con perfiles de fuente configurables.
+- Validación de RUT chileno (dígito verificador módulo 11).
+- Tema oscuro.
 
-[Unreleased]: https://github.com/svaeinki/Napoli/compare/v2.0.9...HEAD
+[Sin publicar]: https://github.com/svaeinki/Napoli/compare/v2.0.9...HEAD
 [2.0.9]: https://github.com/svaeinki/Napoli/releases/tag/v2.0.9
 [2.0.8]: https://github.com/svaeinki/Napoli/commits/main
 [2.0.6]: https://github.com/svaeinki/Napoli/releases/tag/v2.0.6

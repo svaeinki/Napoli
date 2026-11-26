@@ -90,7 +90,7 @@ class DiagnosticsLogger {
         try {
             fs.appendFileSync(this.logPath, data, 'utf8');
         } catch (error) {
-            // No-op on error: diagnostics must not crash the app.
+            // Si falla, no hacer nada: el diagnóstico nunca debe botar la app.
         }
     }
 

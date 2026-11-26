@@ -58,33 +58,43 @@ Napoli was built for one specific shop — a real shoe repair business in Chile 
 | Build | `electron-builder` (NSIS, DMG, AppImage) |
 | CI | GitHub Actions matrix (Windows / macOS / Linux) |
 
-~6,700 lines of application code across ~30 modules, plus 17 test files covering database migrations, backup atomicity, restore utilities, RUT validation, IPC error contracts, and UI helpers.
+~7,400 lines of JavaScript across 42 modules, plus 23 test files covering database migrations, backup atomicity, restore utilities, RUT validation, IPC error contracts, and UI helpers.
 
 ---
 
 ## Architecture
 
 ```
-main.js                      Electron main process — IPC handlers, FS, Dropbox, config
-src/preload.js               Context bridge — typed window.electronAPI surface
-src/db-service.js            DB orchestrator with worker-thread / legacy failover
-src/db-worker.js             Worker thread that owns the SQLite connection
-src/database.js              better-sqlite3 wrapper, schema, migrations, queries
-src/dropbox.js               Dropbox SDK wrapper (optional)
-src/chile-date.js            Chilean locale date helpers
-src/navigation-security.js   External-URL allowlist
-src/sqlite-restore-utils.js  Atomic restore + pre-restore snapshot helpers
-src/diagnostics.js           In-app diagnostic event logger
-src/index.html               Renderer shell
-src/html/tab-*.html          Tab content, loaded dynamically at startup
-src/html/modal-*.html        Modal fragments
-src/js/                      Renderer modules (inventory, search, payments, tickets, ...)
-scripts/tests/               node:test suites
+main.js                               Entry point — registers the app lifecycle and IPC handlers
+src/main/ciclo-vida.js                App lifecycle: startup (DB, Dropbox, window, daily backup), backup on quit
+src/main/ventana.js                   Main window + external-URL handling
+src/main/rutas.js / estado.js         userData paths / runtime state shared across modules
+src/main/utilidades.js                Restore-busy guard, IPC error payloads, timeouts, atomic writes
+src/main/configuracion.js             config.json, printer settings, Dropbox token encryption
+src/main/respaldos.js                 Create, list, clean up and upload backups
+src/main/restauracion.js              Validate and restore a .db with snapshot + rollback
+src/main/exportaciones.js             JSON and Excel exports
+src/main/dropbox-sesion.js            Dropbox connection at startup + upload with timeout
+src/main/ipc/                         IPC handlers, one file per area (db, pagos, backups, dropbox, ...)
+src/main/db-service.js                DB orchestrator with worker-thread / legacy failover
+src/main/db-worker.js                 Worker thread that owns the SQLite connection
+src/main/database.js                  better-sqlite3 wrapper, schema, migrations, queries
+src/main/dropbox.js                   Dropbox SDK wrapper (optional)
+src/main/chile-date.js                Chilean locale date helpers
+src/main/navigation-security.js       External-URL allowlist
+src/main/sqlite-restore-utils.js      Atomic restore + pre-restore snapshot helpers
+src/main/diagnostics.js               In-app diagnostic event logger
+src/preload/preload.js                Context bridge — typed window.electronAPI surface
+src/renderer/index.html               Renderer shell
+src/renderer/html/tab-*.html          Tab content, loaded dynamically at startup
+src/renderer/html/modal-*.html        Modal fragments
+src/renderer/js/                      Renderer modules (inventory, search, payments, tickets, ...)
+scripts/tests/                        node:test suites
 ```
 
 The renderer is deliberately split into small modules (`articulos.js`, `inventario.js`, `pagos.js`, `busqueda.js`, `backups.js`, `tickets.js`, `config.js`, `validacion.js`, `utils.js`, `theme.js`, `templateLoader.js`). HTML fragments are loaded at runtime by `templateLoader.js` so each tab and modal lives in its own file, and the rest of the code waits on a `templatesListos` promise before touching the DOM.
 
-All renderer ↔ main communication goes through IPC channels exposed by `preload.js`. Every handler follows the same contract: it returns `{ success, data? }` or `{ success: false, error, code? }` — never throws — and is blocked immediately during a DB restore so in-flight UI actions can't corrupt the restore.
+All renderer ↔ main communication goes through IPC channels exposed by `src/preload/preload.js` and handled in `src/main/ipc/`. Every handler follows the same contract: it returns `{ success, data? }` or `{ success: false, error, code? }` — never throws — and is blocked immediately during a DB restore so in-flight UI actions can't corrupt the restore.
 
 ---
 
@@ -111,7 +121,7 @@ RUT is the Chilean national ID used as the customer key in this shop. The valida
 Every IPC handler returns a structured result object rather than throwing — `{ success: true, data }` or `{ success: false, error, code }`. The renderer treats IPC like a network boundary, which makes error paths uniform and testable (see `scripts/tests/ipc-read-error-contract.test.js`). During a DB restore, every handler short-circuits with a busy response via `respuestaBloqueoRestoreEscritura()` so no write can land mid-restore.
 
 ### Guarded restore flow
-Restoring a backup is the single most dangerous user action in the app: a bad file can destroy the live database. So the restore path validates the file header first, takes a snapshot of the current DB before touching it, does an atomic file replace, and runs a post-restore smoke check. If anything fails, the snapshot is rolled back in. See `src/sqlite-restore-utils.js` and `scripts/tests/sqlite-restore-utils.test.js`.
+Restoring a backup is the single most dangerous user action in the app: a bad file can destroy the live database. So the restore path validates the file header first, takes a snapshot of the current DB before touching it, does an atomic file replace, and runs a post-restore smoke check. If anything fails, the snapshot is rolled back in. See `src/main/restauracion.js`, `src/main/sqlite-restore-utils.js` and `scripts/tests/sqlite-restore-utils.test.js`.
 
 ---
 
@@ -173,7 +183,7 @@ Napoli is built for a real business and takes the data seriously:
 - **No telemetry.** The app does not phone home. It makes no network calls unless the user explicitly configures Dropbox.
 - **Dropbox is strictly opt-in.** The Dropbox refresh token is obtained through the user's own authorization and persisted locally. The app talks to Dropbox directly — there is no server I control in between.
 - **No customer data in this repository.** The code is generic: schemas, validators, and UI. No customer names, RUTs, transactions, or backup files are committed. A full pre-publish audit (`gitleaks` + `trufflehog --only-verified` + manual PII sweep over the whole git history) found no secrets or business data in any commit.
-- **SQL injection, XSS, and navigation hardening.** All queries use prepared statements. Every value interpolated into `innerHTML` goes through an `escaparHtml()` helper. External URL navigation is restricted to an allowlist (`src/navigation-security.js`).
+- **SQL injection, XSS, and navigation hardening.** All queries use prepared statements. Every value interpolated into `innerHTML` goes through an `escaparHtml()` helper. External URL navigation is restricted to an allowlist (`src/main/navigation-security.js`).
 
 ---
 

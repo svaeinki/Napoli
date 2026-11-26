@@ -399,28 +399,42 @@ gyp ERR! build error
 
 ```
 Napoli/
-├── main.js                      # Proceso principal: handlers IPC, archivos, config, backups, Dropbox
+├── main.js                      # Punto de entrada: registra el ciclo de vida y los handlers IPC
 ├── src/
-│   ├── preload.js               # Puente seguro: expone window.electronAPI al renderer
-│   ├── db-service.js            # Orquestador de DB: worker thread con respaldo en modo directo
-│   ├── db-worker.js             # Worker thread dueño de la conexión SQLite
-│   ├── database.js              # Wrapper de better-sqlite3: esquema, migraciones y consultas
-│   ├── dropbox.js               # Integración con Dropbox (opcional)
-│   ├── chile-date.js            # Fechas en formato chileno
-│   ├── navigation-security.js   # Lista permitida de URLs externas (solo dropbox.com)
-│   ├── sqlite-restore-utils.js  # Restauración atómica y snapshot previo
-│   ├── backup-filename.js       # Nombres únicos para archivos de backup
-│   ├── diagnostics.js           # Registro de eventos de diagnóstico
-│   ├── index.html               # Estructura principal del renderer
-│   ├── html/
-│   │   ├── tab-*.html           # Contenido de cada pestaña (se carga al iniciar)
-│   │   ├── modal-*.html         # Modales (configuración, pagos, ticket, confirmación)
-│   │   └── ticket.html          # Template base del ticket
-│   ├── js/                      # Módulos del renderer (inventario, búsqueda, pagos, tickets, ...)
-│   ├── css/
-│   │   ├── styles.css           # Estilos de la interfaz
-│   │   └── ticket.css           # Estilos de impresión térmica
-│   └── assets/                  # Logo
+│   ├── main/                    # Proceso principal (Node)
+│   │   ├── ciclo-vida.js        # Arranque (base, Dropbox, ventana, backup cada 24 h) y cierre con backup
+│   │   ├── ventana.js           # Ventana principal y lista permitida de URLs externas
+│   │   ├── rutas.js             # Rutas de userData, napoli.db, config.json y backups/
+│   │   ├── estado.js            # Estado compartido entre módulos (base, Dropbox, ventana)
+│   │   ├── utilidades.js        # Bloqueo durante restauración, errores IPC, timeouts, escritura atómica
+│   │   ├── configuracion.js     # config.json, impresora y cifrado del token de Dropbox
+│   │   ├── respaldos.js         # Crear, listar y limpiar backups; subida a Dropbox
+│   │   ├── restauracion.js      # Validar y restaurar un .db con snapshot y rollback
+│   │   ├── exportaciones.js     # Exportar a JSON y Excel
+│   │   ├── dropbox-sesion.js    # Conexión a Dropbox al arrancar y subida con timeout
+│   │   ├── ipc/                 # Handlers IPC por área (db, pagos, backups, dropbox, config, imprimir, diag)
+│   │   ├── db-service.js        # Orquestador de DB: worker thread con respaldo en modo directo
+│   │   ├── db-worker.js         # Worker thread dueño de la conexión SQLite
+│   │   ├── database.js          # Wrapper de better-sqlite3: esquema, migraciones y consultas
+│   │   ├── dropbox.js           # Integración con Dropbox (opcional)
+│   │   ├── chile-date.js        # Fechas en formato chileno
+│   │   ├── navigation-security.js  # Lista permitida de URLs externas (solo dropbox.com)
+│   │   ├── sqlite-restore-utils.js # Restauración atómica y snapshot previo
+│   │   ├── backup-filename.js   # Nombres únicos para archivos de backup
+│   │   └── diagnostics.js       # Registro de eventos de diagnóstico
+│   ├── preload/
+│   │   └── preload.js           # Puente seguro: expone window.electronAPI al renderer
+│   └── renderer/                # Interfaz
+│       ├── index.html           # Estructura principal del renderer
+│       ├── html/
+│       │   ├── tab-*.html       # Contenido de cada pestaña (se carga al iniciar)
+│       │   ├── modal-*.html     # Modales (configuración, pagos, ticket, confirmación)
+│       │   └── ticket.html      # Template base del ticket
+│       ├── js/                  # Módulos del renderer (inventario, búsqueda, pagos, tickets, ...)
+│       ├── css/
+│       │   ├── styles.css       # Estilos de la interfaz
+│       │   └── ticket.css       # Estilos de impresión térmica
+│       └── assets/              # Logo y fuente Archivo
 ├── scripts/
 │   ├── tests/                   # Suites de node:test
 │   ├── check-syntax.js          # Verificación de sintaxis
@@ -431,7 +445,7 @@ Napoli/
 └── package.json
 ```
 
-Toda la comunicación entre el renderer y el proceso principal pasa por canales IPC expuestos en `preload.js`. Cada handler devuelve `{ success, data? }` o `{ success: false, error, code? }` (nunca lanza excepciones) y se bloquea de inmediato durante una restauración de la base de datos, para que ninguna acción de la interfaz pueda corromperla.
+Toda la comunicación entre el renderer y el proceso principal pasa por canales IPC expuestos en `src/preload/preload.js` y atendidos en `src/main/ipc/`. Cada handler devuelve `{ success, data? }` o `{ success: false, error, code? }` (nunca lanza excepciones) y se bloquea de inmediato durante una restauración de la base de datos, para que ninguna acción de la interfaz pueda corromperla.
 
 ---
 
@@ -451,7 +465,7 @@ Toda la comunicación entre el renderer y el proceso principal pasa por canales 
 - **Sin telemetría.** La app no hace llamadas de red salvo que se configure Dropbox.
 - **Dropbox es opcional.** La usuaria autoriza su propia app de Dropbox y el *refresh token* se guarda localmente.
 - **Sin datos de clientes en este repositorio.** El código es genérico: esquemas, validadores e interfaz.
-- **Protección contra inyección SQL, XSS y navegación.** Todas las consultas usan sentencias preparadas, todo valor insertado en `innerHTML` pasa por `escaparHtml()` y la navegación externa está restringida a una lista permitida (`src/navigation-security.js`).
+- **Protección contra inyección SQL, XSS y navegación.** Todas las consultas usan sentencias preparadas, todo valor insertado en `innerHTML` pasa por `escaparHtml()` y la navegación externa está restringida a una lista permitida (`src/main/navigation-security.js`).
 
 Para reportar vulnerabilidades, consulta [`SECURITY.md`](./SECURITY.md).
 
