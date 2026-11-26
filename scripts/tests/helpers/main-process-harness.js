@@ -167,11 +167,9 @@ function cargarMainProcess({ dropboxFactory = null, configInicial = null, encryp
         };
     }
 
+    // Globales del sandbox; require, module, __dirname y __filename los recibe cada módulo
+    // en su envoltura, igual que en Node.
     sandbox = {
-        require: crearRequire(ROOT),
-        __dirname: ROOT,
-        __filename: MAIN_PATH,
-        module: { exports: {} },
         process,
         Buffer,
         console: { log() {}, warn() {}, error() {} },
@@ -182,7 +180,7 @@ function cargarMainProcess({ dropboxFactory = null, configInicial = null, encryp
         clearInterval: () => {}
     };
     vm.createContext(sandbox);
-    vm.runInContext(fs.readFileSync(MAIN_PATH, 'utf8'), sandbox, { filename: MAIN_PATH });
+    cargarModuloEnSandbox(MAIN_PATH);
 
     return {
         userData,
