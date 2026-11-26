@@ -5,7 +5,7 @@ const path = require('path');
 const vm = require('vm');
 
 const ticketsScript = fs.readFileSync(
-    path.join(__dirname, '../../src/js/tickets.js'),
+    path.join(__dirname, '../../src/renderer/js/tickets.js'),
     'utf8'
 );
 

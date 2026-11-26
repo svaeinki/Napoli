@@ -5,7 +5,7 @@ const path = require('path');
 const vm = require('vm');
 
 const utilsScript = fs.readFileSync(
-    path.join(__dirname, '../../src/js/utils.js'),
+    path.join(__dirname, '../../src/renderer/js/utils.js'),
     'utf8'
 );
 

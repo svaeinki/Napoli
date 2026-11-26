@@ -974,7 +974,7 @@ function createWindow() {
         abrirUrlExternaPermitida(url);
     });
 
-    mainWindow.loadFile('src/index.html');
+    mainWindow.loadFile('src/renderer/index.html');
 
     mainWindow.on('closed', () => {
         mainWindow = null;

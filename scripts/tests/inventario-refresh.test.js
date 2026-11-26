@@ -5,7 +5,7 @@ const path = require('path');
 const vm = require('vm');
 
 const inventarioScript = fs.readFileSync(
-    path.join(__dirname, '../../src/js/inventario.js'),
+    path.join(__dirname, '../../src/renderer/js/inventario.js'),
     'utf8'
 );
 
@@ -14,7 +14,7 @@ function cargarHelpersIpc() {
     const utilsContext = { AbortController, console, document: {}, window: {} };
     vm.createContext(utilsContext);
     vm.runInContext(
-        fs.readFileSync(path.join(__dirname, '../../src/js/utils.js'), 'utf8'),
+        fs.readFileSync(path.join(__dirname, '../../src/renderer/js/utils.js'), 'utf8'),
         utilsContext,
         { filename: 'utils.js' }
     );

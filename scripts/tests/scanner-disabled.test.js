@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 
 const mainRendererScript = fs.readFileSync(
-    path.join(__dirname, '../../src/js/main.js'),
+    path.join(__dirname, '../../src/renderer/js/main.js'),
     'utf8'
 );
 
