@@ -1,5 +1,6 @@
-// Carga main.js en un sandbox (vm) con electron, better-sqlite3, DBService y Dropbox simulados,
-// para probar handlers IPC y lógica del proceso principal sin levantar Electron.
+// Carga main.js (y los módulos de src/main/ que requiere) en un sandbox (vm) con electron,
+// better-sqlite3, DBService y Dropbox simulados, para probar handlers IPC y lógica del proceso
+// principal sin levantar Electron.
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -7,6 +8,17 @@ const vm = require('vm');
 
 const ROOT = path.join(__dirname, '..', '..', '..');
 const MAIN_PATH = path.join(ROOT, 'main.js');
+const SRC_MAIN = path.join(ROOT, 'src', 'main');
+
+// Módulos sin estado que se cargan con el require real de Node (como siempre se hizo).
+// Todo otro módulo local del proceso principal se evalúa dentro del sandbox, con una caché
+// propia por cada cargarMainProcess(), para que el estado no se comparta entre tests.
+const MODULOS_REQUIRE_REAL = new Set([
+    'navigation-security.js',
+    'backup-filename.js',
+    'sqlite-restore-utils.js',
+    'chile-date.js'
+].map((nombre) => path.join(SRC_MAIN, nombre)));
 
 class FakeDBService {
     constructor() {
@@ -96,31 +108,67 @@ function cargarMainProcess({ dropboxFactory = null, configInicial = null, encryp
         dialog: { showOpenDialog: async () => ({ canceled: true, filePaths: [] }) }
     };
 
-    const mocks = {
+    // Paquetes simulados, por nombre.
+    const mocksPorNombre = {
         electron: electronMock,
-        'better-sqlite3': FakeBetterSqlite,
-        './src/main/db-service': function DBServiceMock() { return dbService; },
-        './src/main/dropbox': dropboxFactory || function DropboxMock() {
+        'better-sqlite3': FakeBetterSqlite
+    };
+
+    // Módulos locales simulados, por ruta absoluta (así da igual desde qué archivo se requieran).
+    const mocksPorRuta = new Map([
+        [path.join(SRC_MAIN, 'db-service.js'), function DBServiceMock() { return dbService; }],
+        [path.join(SRC_MAIN, 'dropbox.js'), dropboxFactory || function DropboxMock() {
             this.estaConfigurado = () => true;
-        },
-        './src/main/diagnostics': {
+        }],
+        [path.join(SRC_MAIN, 'diagnostics.js'), {
             DiagnosticsLogger: class {
                 init() {}
                 log() {}
                 startEventLoopMonitor() {}
                 stopEventLoopMonitor() {}
             }
-        }
-    };
+        }]
+    ]);
 
-    const sandboxRequire = (nombre) => {
-        if (Object.prototype.hasOwnProperty.call(mocks, nombre)) return mocks[nombre];
-        if (nombre.startsWith('./')) return require(path.join(ROOT, nombre));
-        return require(nombre);
-    };
+    const modulosCargados = new Map();
+    let sandbox;
 
-    const sandbox = {
-        require: sandboxRequire,
+    function cargarModuloEnSandbox(ruta) {
+        if (modulosCargados.has(ruta)) return modulosCargados.get(ruta).exports;
+        const moduloSandbox = { exports: {} };
+        modulosCargados.set(ruta, moduloSandbox);
+        const codigo = fs.readFileSync(ruta, 'utf8');
+        const envoltura = vm.runInContext(
+            `(function (exports, require, module, __filename, __dirname) {${codigo}\n})`,
+            sandbox,
+            { filename: ruta }
+        );
+        envoltura.call(
+            moduloSandbox.exports,
+            moduloSandbox.exports,
+            crearRequire(path.dirname(ruta)),
+            moduloSandbox,
+            ruta,
+            path.dirname(ruta)
+        );
+        return moduloSandbox.exports;
+    }
+
+    function crearRequire(directorio) {
+        return (nombre) => {
+            if (Object.prototype.hasOwnProperty.call(mocksPorNombre, nombre)) return mocksPorNombre[nombre];
+            if (nombre.startsWith('./') || nombre.startsWith('../')) {
+                const ruta = require.resolve(path.resolve(directorio, nombre));
+                if (mocksPorRuta.has(ruta)) return mocksPorRuta.get(ruta);
+                if (MODULOS_REQUIRE_REAL.has(ruta)) return require(ruta);
+                return cargarModuloEnSandbox(ruta);
+            }
+            return require(nombre);
+        };
+    }
+
+    sandbox = {
+        require: crearRequire(ROOT),
         __dirname: ROOT,
         __filename: MAIN_PATH,
         module: { exports: {} },
@@ -150,6 +198,12 @@ function cargarMainProcess({ dropboxFactory = null, configInicial = null, encryp
             return handler({}, ...args);
         },
         tieneHandler: (canal) => handlers.has(canal),
+        // Exports de un módulo de src/main/ ya cargado en este sandbox (p. ej. modulo('respaldos')).
+        modulo: (nombre) => {
+            const ruta = path.join(SRC_MAIN, `${nombre}.js`);
+            if (!modulosCargados.has(ruta)) throw new Error(`Módulo no cargado en el sandbox: ${nombre}`);
+            return modulosCargados.get(ruta).exports;
+        },
         sandbox,
         limpiar: () => fs.rmSync(userData, { recursive: true, force: true })
     };
