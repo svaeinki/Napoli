@@ -37,18 +37,22 @@ const {
     cifrarToken,
     descifrarToken
 } = require('./src/main/configuracion');
+const {
+    WARNING_TOKEN_NO_CIFRADO,
+    INSECURE_STORAGE_RESPONSE_CODE,
+    OP_DECISION_DROPBOX_TOKEN_SIN_CIFRADO,
+    inicializarDropboxDesdeConfiguracion,
+    subirBackupDBConTimeout
+} = require('./src/main/dropbox-sesion');
+const { abrirUrlExternaPermitida, createWindow } = require('./src/main/ventana');
 
 let workerRetryTimer = null;
 let workerRetryCount = 0;
 
 const BACKUP_CLOSE_TIMEOUT_MS = 15000;
-const DROPBOX_UPLOAD_TIMEOUT_MS = 12000;
 const DB_WORKER_RETRY_INTERVAL_MS = 30000;
 const DB_WORKER_MAX_RETRIES = 10;
 const REQUIRED_BACKUP_TABLES = ['articulos', 'abonos', 'auditoria'];
-const WARNING_TOKEN_NO_CIFRADO = 'Tu sistema no permite cifrado local del token de Dropbox; se guardará sin cifrar en este equipo.';
-const INSECURE_STORAGE_RESPONSE_CODE = 'INSECURE_STORAGE';
-const OP_DECISION_DROPBOX_TOKEN_SIN_CIFRADO = 'DROPBOX_TOKEN_SIN_CIFRADO';
 const rutasAprobadasPorDialogo = new Set();
 const RUTAS_APROBADAS_MAX = 20;
 
@@ -434,18 +438,6 @@ function obtenerEstadoBackups() {
     };
 }
 
-function abrirUrlExternaPermitida(url) {
-    if (!esUrlExternaPermitida(url)) {
-        console.error(`Bloqueada navegación externa no permitida: ${url}`);
-        return false;
-    }
-
-    shell.openExternal(url).catch((error) => {
-        console.error(`Error abriendo URL externa permitida (${url}):`, error);
-    });
-    return true;
-}
-
 function esRutaPermitidaParaBackup(rutaArchivo) {
     if (!rutaArchivo || typeof rutaArchivo !== 'string') return false;
     const rutaAbsoluta = path.resolve(rutaArchivo.trim());
@@ -496,14 +488,6 @@ function sanitizarArticuloInput(articulo) {
     return { valid: true };
 }
 
-async function subirBackupDBConTimeout(backupPath) {
-    return await withTimeout(
-        estado.dropboxManager.subirBackupDB(backupPath),
-        DROPBOX_UPLOAD_TIMEOUT_MS,
-        'Timeout subiendo backup a Dropbox'
-    );
-}
-
 function obtenerRuntimeInfo() {
     return {
         success: true,
@@ -550,44 +534,6 @@ function iniciarReintentoWorkerDb() {
     }, DB_WORKER_RETRY_INTERVAL_MS);
 }
 
-function createWindow() {
-    estado.mainWindow = new BrowserWindow({
-        width: 1400,
-        height: 900,
-        icon: path.join(__dirname, 'build/icon.png'),
-        webPreferences: {
-            preload: path.join(__dirname, 'src/preload/preload.js'),
-            contextIsolation: true,
-            nodeIntegration: false,
-            sandbox: true
-        },
-        title: 'Napoli - Reparadora de Calzado'
-    });
-
-    // Para desarrollo: descomentar para ver DevTools
-    // estado.mainWindow.webContents.openDevTools();
-
-    estado.mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-        abrirUrlExternaPermitida(url);
-        return { action: 'deny' };
-    });
-
-    estado.mainWindow.webContents.on('will-navigate', (event, url) => {
-        if (esFileUrl(url)) {
-            return;
-        }
-
-        event.preventDefault();
-        abrirUrlExternaPermitida(url);
-    });
-
-    estado.mainWindow.loadFile('src/renderer/index.html');
-
-    estado.mainWindow.on('closed', () => {
-        estado.mainWindow = null;
-    });
-}
-
 app.whenReady().then(async () => {
     estado.diagnostics = new DiagnosticsLogger({ userDataPath: USER_DATA_PATH, enabled: true });
     estado.diagnostics.init();
@@ -608,33 +554,7 @@ app.whenReady().then(async () => {
     }
 
     // Inicializar Dropbox si está configurado
-    const config = cargarConfiguracion();
-    const credencialesOAuth = leerCredencialesDropboxOAuth(config);
-    if (credencialesOAuth) {
-        if (!safeStorage.isEncryptionAvailable()) {
-            console.error(`Token Dropbox: ${WARNING_TOKEN_NO_CIFRADO}`);
-            registrarDecisionOperativa({
-                code: OP_DECISION_DROPBOX_TOKEN_SIN_CIFRADO,
-                context: 'dropbox:auto_init',
-                note: 'Refresh token de Dropbox cargado en equipo sin cifrado local disponible.'
-            }, config);
-        }
-        estado.dropboxManager = new DropboxManager(credencialesOAuth);
-    } else if (config.dropboxToken) {
-        // Token antiguo (pegado desde la App Console): sigue funcionando hasta que expire.
-        const token = descifrarToken(config.dropboxToken);
-        if (token) {
-            if (!safeStorage.isEncryptionAvailable()) {
-                console.error(`Token Dropbox: ${WARNING_TOKEN_NO_CIFRADO}`);
-                registrarDecisionOperativa({
-                    code: OP_DECISION_DROPBOX_TOKEN_SIN_CIFRADO,
-                    context: 'dropbox:auto_init',
-                    note: 'Token Dropbox cargado en equipo sin cifrado local disponible.'
-                }, config);
-            }
-            estado.dropboxManager = new DropboxManager(token);
-        }
-    }
+    inicializarDropboxDesdeConfiguracion();
 
     createWindow();
 
@@ -1249,15 +1169,6 @@ function limpiarBackupsAntiguos() {
 
 const APP_KEY_DROPBOX_REGEX = /^[a-z0-9]{8,32}$/i;
 let autorizacionDropboxPendiente = null;
-
-function leerCredencialesDropboxOAuth(config) {
-    const auth = config && config.dropboxAuth;
-    if (!auth || typeof auth !== 'object') return null;
-    const appKey = typeof auth.appKey === 'string' ? auth.appKey.trim() : '';
-    const refreshToken = descifrarToken(auth.refreshToken);
-    if (!appKey || !refreshToken) return null;
-    return { appKey, refreshToken };
-}
 
 // Paso 1: genera la URL de autorización (PKCE) y la abre en el navegador.
 ipcMain.handle('dropbox:iniciarAutorizacion', async (_event, appKey) => {
